@@ -4,6 +4,10 @@ An interactive concept demo. It shows how a crypto-crime trace could look as a m
 
 Live: https://trm-globe-demo.vercel.app/
 
+[![Demo: a pig-butchering trace plays on the globe](docs/demo.gif)](docs/demo.mp4)
+
+**[Watch the full 50-second demo (MP4)](docs/demo.mp4).** It shows the USSS pig-butchering case on the globe, the "Share with USSS" approval, and then the Bybit hack in the graph view.
+
 > **Concept mock, not a TRM product screen.** I built it as a portfolio piece for a Marketing Technology Engineer interview. TRM's product uses a graph view, so the demo also has a Globe/Graph toggle.
 
 ## What is in it
@@ -31,6 +35,7 @@ The site is unlisted. A `noindex` meta tag and an `X-Robots-Tag` header in `verc
 
 ```
 index.html                  the whole app (HTML, CSS, JS)
+docs/demo.mp4, demo.gif     README demo video (not deployed, see .vercelignore)
 *.woff2                     Open Sans and Ubuntu Sans variable fonts
 vendor/three.min.js         three.js (MIT)
 vendor/topojson-client.min.js
