@@ -1,0 +1,1182 @@
+<!doctype html>
+<html>
+<head>
+<meta name="robots" content="noindex, nofollow">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRM Globe Demo</title>
+<style>
+  @font-face { font-family: "Ubuntu Sans"; src: url("UbuntuSans-Variable.latin.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Open Sans"; src: url("OpenSans-Variable.latin.woff2") format("woff2"); font-weight: 300 800; }
+  :root {
+    --bg:#0a0c0e; --panel:#13171a; --ink:#eef1f2; --muted:#8c979d; --line:#262d32;
+    --accent:#ffce54; --red:#e5564b; --ok-ink:#8fd3b0;
+    --display:"Ubuntu Sans", sans-serif; --body:"Open Sans", sans-serif; --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  /* fixed 1920x1080 stage, scaled to fit the window */
+  #vp { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; background: radial-gradient(circle at 36% 56%, #142029 0%, var(--bg) 62%); font-family: var(--body); color: var(--ink); user-select: none; }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  #gl.drag { cursor: grabbing; }
+  .corner { position: absolute; width: 46px; height: 46px; border: 0 solid #3a444a; pointer-events: none; }
+  .c-tl { left: 36px; top: 36px; border-left-width: 3px; border-top-width: 3px; }
+  .c-tr { right: 36px; top: 36px; border-right-width: 3px; border-top-width: 3px; }
+  .c-bl { left: 36px; bottom: 36px; border-left-width: 3px; border-bottom-width: 3px; }
+  .c-br { right: 36px; bottom: 36px; border-right-width: 3px; border-bottom-width: 3px; }
+  #scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px); }
+  #top { position: absolute; left: 72px; top: 62px; }
+  #top .k { font: 700 20px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  #top .t { font: 800 44px/1.15 var(--display); margin-top: 6px; }
+  #top .s { font: 500 22px var(--body); color: var(--muted); margin-top: 6px; }
+  #top { pointer-events: auto; }
+  #cases { display: flex; gap: 10px; margin-top: 18px; }
+  .case { font: 700 17px var(--display); letter-spacing: .06em; color: var(--muted); background: var(--panel); border: 2px solid var(--line); border-radius: 999px; padding: 8px 18px; cursor: pointer; }
+  .case:hover { color: var(--ink); border-color: #3a444a; }
+  .case.on { color: #17140a; background: var(--accent); border-color: var(--accent); }
+  #readout { position: absolute; right: 72px; top: 110px; font: 500 16px var(--mono); color: #5d686e; letter-spacing: .04em; pointer-events: none; }
+  #mock { position: absolute; right: 72px; top: 80px; font: 600 18px var(--display); letter-spacing: .12em; text-transform: uppercase; color: #6f7a80; }
+  #note { position: absolute; right: 72px; bottom: 20px; font: 500 15px var(--mono); color: #59656b; letter-spacing: .03em; }
+  #swarm { position: absolute; left: 72px; top: 260px; width: 250px; pointer-events: none; opacity: 0; }
+  #swarm b { display: block; font: 800 64px/1 var(--display); color: var(--ink); }
+  #swarm span { display: block; margin-top: 8px; font: 500 16px/1.4 var(--mono); color: var(--muted); }
+  #lang { position: absolute; right: 72px; top: 36px; display: flex; gap: 6px; }
+  #lang button { font: 700 14px var(--display); letter-spacing: .06em; color: var(--muted); background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+  #lang button:hover { color: var(--ink); }
+  #lang button.on { color: #17140a; background: var(--accent); border-color: var(--accent); }
+  #viewSw { position: absolute; left: 1010px; top: 232px; display: flex; background: var(--panel); border: 2px solid var(--line); border-radius: 999px; padding: 3px; }
+  #viewSw button { font: 700 15px var(--display); letter-spacing: .06em; color: var(--muted); background: transparent; border: 0; border-radius: 999px; padding: 6px 16px; cursor: pointer; }
+  #viewSw button.on { color: #17140a; background: var(--accent); }
+  #graph { position: absolute; left: 72px; top: 240px; width: 1150px; height: 500px; display: none; pointer-events: none; }
+  #graph svg { overflow: visible; }
+  #graph .gn { pointer-events: auto; cursor: pointer; }
+  #graph .gtag { font: 700 12px var(--display); letter-spacing: .14em; text-transform: uppercase; fill: var(--muted); }
+  #graph .gname { font: 700 17px var(--display); fill: var(--ink); }
+  #graph .gsub { font: 500 13px var(--mono); fill: var(--muted); }
+  #graph .ring { animation: gpulse 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes gpulse { from { transform: scale(1); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+  #labels { position: absolute; inset: 0; pointer-events: none; }
+  .lab { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; padding: 6px 12px; border-radius: 8px; background: rgba(10,12,14,.86); border: 2px solid var(--line); font: 700 19px var(--display); letter-spacing: .04em; cursor: pointer; transition: background .15s; }
+  .lab:hover { background: #1c2328; }
+  .lab .sub { display: block; font: 500 16px var(--mono); color: var(--muted); letter-spacing: 0; margin-top: 2px; }
+  .lab.red { border-color: rgba(229,86,75,.7); }
+  .lab.yel { border-color: var(--accent); color: var(--accent); }
+  .lab.grn { border-color: #2e5a44; color: var(--ok-ink); }
+  .lab.below { transform: translate(-50%, 34px); }
+  #panel { position: absolute; right: 72px; top: 150px; width: 560px; background: var(--panel); border: 3px solid var(--line); border-radius: 18px; padding: 26px 30px 22px; box-shadow: 0 4px 0 #050607; }
+  #panel h3 { white-space: nowrap; gap: 16px; }
+  #panel h3 { margin: 0 0 14px; font: 800 22px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+  .row { display: grid; grid-template-columns: 170px 1fr; gap: 14px; padding: 13px 10px; margin: 0 -10px; border-top: 2px solid #1d2327; font-size: 23px; line-height: 1.35; border-radius: 8px; transition: background .2s; }
+  .row.hl { background: rgba(255,206,84,.09); }
+  .row .k { font: 700 17px/1.9 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .row .v { font-weight: 600; }
+  .row .v small { display: block; font: 500 17px var(--mono); color: var(--muted); margin-top: 2px; }
+  .big { font: 800 40px var(--display); color: var(--accent); }
+  .src { display: inline-block; font: 600 15px var(--mono); color: var(--accent); border: 1.5px solid rgba(255,206,84,.5); border-radius: 6px; padding: 1px 7px; margin-left: 8px; vertical-align: 2px; cursor: pointer; }
+  .src:hover { background: rgba(255,206,84,.15); }
+  #act { margin-top: 16px; display: flex; gap: 12px; }
+  .btn { flex: 1; text-align: center; padding: 15px 0; border-radius: 12px; font: 800 21px var(--display); letter-spacing: .04em; border: 2px solid var(--line); color: var(--muted); background: transparent; cursor: pointer; }
+  .btn:hover { border-color: #3a444a; color: var(--ink); }
+  .btn.go { background: var(--accent); color: #17140a; border-color: var(--accent); }
+  .btn.go:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .45; cursor: default; filter: none; }
+  /* evidence card */
+  #detail { position: absolute; left: 72px; bottom: 140px; width: 560px; background: var(--panel); border: 2px solid var(--accent); border-radius: 14px; padding: 18px 22px; opacity: 0; transform: translateY(10px); transition: opacity .2s, transform .2s; pointer-events: none; }
+  #detail.on { opacity: 1; transform: none; pointer-events: auto; }
+  #detail .dk { font: 700 16px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); display: flex; justify-content: space-between; }
+  #detail .dk span { cursor: pointer; color: var(--muted); }
+  #detail .dt { font: 700 24px var(--display); margin: 6px 0 6px; }
+  #detail .dd { font: 500 19px/1.45 var(--body); color: #c6cdd1; }
+  #real { position: absolute; inset: 0; background: rgba(4,5,6,.78); display: none; align-items: center; justify-content: center; }
+  #real.on { display: flex; }
+  #real .card { width: 1180px; border-color: var(--accent); }
+  #real .who { font: 600 20px var(--body); color: var(--muted); margin-top: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 22px 0; }
+  .stat { background: #0f1316; border: 2px solid #1d2327; border-radius: 12px; padding: 14px 18px; }
+  .stat b { display: block; font: 800 38px var(--display); color: var(--accent); }
+  .stat span { font: 500 17px var(--body); color: #c6cdd1; }
+  .rcols { display: grid; grid-template-columns: 1.15fr 1fr; gap: 34px; }
+  .rh { font: 700 16px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .rtl { position: relative; padding-left: 22px; }
+  .rtl::before { content: ''; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: #2b3237; }
+  .rtl div { position: relative; padding: 5px 0; font: 500 18px/1.4 var(--body); color: #d3d9dc; }
+  .rtl div::before { content: ''; position: absolute; left: -22px; top: 11px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .rtl em { display: block; font: 600 15px var(--mono); font-style: normal; color: var(--accent); }
+  .rhelp div { font: 600 19px/1.4 var(--body); padding: 7px 0; border-top: 2px solid #1d2327; }
+  .rq { margin-top: 16px; font: italic 500 19px/1.45 var(--body); color: #c6cdd1; border-left: 3px solid var(--accent); padding-left: 14px; }
+  #real .fine { font: 500 15px var(--mono); color: #6f7a80; margin: 18px 0 14px; }
+  #real a.btn { text-decoration: none; display: block; }
+  #detail .dd a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  #detail .dd a:hover { text-decoration: underline; }
+  #detail .dd .fine { display: block; margin-top: 10px; font: 500 15px var(--mono); color: #6f7a80; }
+  #realBtn { font: 700 17px var(--display); letter-spacing: .06em; color: var(--accent); background: transparent; border: 2px dashed rgba(255,206,84,.55); border-radius: 999px; padding: 8px 18px; cursor: pointer; margin-left: 8px; }
+  #realBtn:hover { background: rgba(255,206,84,.1); }
+  #detail .dd code { font: 500 16px var(--mono); color: var(--muted); }
+  /* step bar */
+  #bar { position: absolute; right: 72px; bottom: 60px; width: 560px; }
+  #cap { font: 600 21px/1.4 var(--body); color: #d3d9dc; min-height: 92px; margin-bottom: 14px; transition: opacity .22s, transform .22s; }
+  #cap.swap { opacity: 0; transform: translateY(8px); }
+  #cap b { color: var(--accent); font-family: var(--display); letter-spacing: .1em; font-size: 17px; text-transform: uppercase; display: block; margin-bottom: 2px; }
+  #ctrl { display: flex; align-items: center; gap: 12px; }
+  .cb { font: 700 18px var(--display); letter-spacing: .06em; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 10px; padding: 10px 20px; cursor: pointer; }
+  .cb:hover { border-color: var(--accent); }
+  .cb:disabled { opacity: .35; cursor: default; border-color: var(--line); }
+  .cb.pri { background: var(--accent); color: #17140a; border-color: var(--accent); }
+  .dots { display: flex; gap: 8px; margin: 0 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #2b3237; cursor: pointer; }
+  .dot.on { background: var(--accent); }
+  /* freeze request modal */
+  #modal { position: absolute; inset: 0; background: rgba(4,5,6,.72); display: none; align-items: center; justify-content: center; }
+  #modal.on { display: flex; }
+  .card { width: 760px; background: var(--panel); border: 3px solid var(--line); border-radius: 18px; padding: 30px 36px; }
+  .card h2 { margin: 0; font: 800 34px var(--display); }
+  .card .k2 { font: 700 17px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .card .f { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 11px 0; border-top: 2px solid #1d2327; font: 600 21px/1.4 var(--body); }
+  .card .f:first-of-type { margin-top: 18px; }
+  .card .f .k { font: 700 16px/1.9 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .card .note { font: 500 18px var(--body); color: var(--muted); margin: 14px 0 18px; }
+  .card .row2 { display: flex; gap: 12px; }
+  #toast { position: absolute; left: 50%; top: 40px; transform: translate(-50%, -20px); background: #1f3329; color: var(--ok-ink); border: 2px solid #2e5a44; border-radius: 12px; padding: 12px 22px; font: 700 20px var(--display); opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #hint { white-space: nowrap; font: 600 15px var(--display); letter-spacing: .1em; text-transform: uppercase; color: #59656b; margin-left: auto; transition: opacity .4s; }
+  /* case timeline */
+  #tl { position: absolute; left: 72px; bottom: 54px; width: 1150px; }
+  #tlTop { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  #play { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--accent); background: transparent; color: var(--accent); font-size: 17px; cursor: pointer; flex: none; }
+  #play:hover { background: rgba(255,206,84,.12); }
+  #clock { font: 700 22px var(--mono); color: var(--ink); letter-spacing: .02em; white-space: nowrap; }
+  #evt { font: 600 20px var(--body); color: #c6cdd1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #evt b { color: var(--accent); font: 800 15px var(--display); letter-spacing: .12em; text-transform: uppercase; margin-right: 8px; }
+  #track { position: relative; height: 34px; cursor: pointer; touch-action: none; }
+  #track { margin-right: 24px; }
+  #rail { position: absolute; left: 0; right: 0; top: 15px; height: 4px; border-radius: 2px; background: #252c31; }
+  #fill { position: absolute; left: 0; top: 15px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--red), var(--accent)); }
+  #head { position: absolute; top: 4px; width: 4px; height: 26px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.6); }
+  .mk { position: absolute; top: 9px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #1b2125; border: 3px solid #3a444a; transition: background .2s, border-color .2s; }
+  .mk.hit.red { border-color: var(--red); background: #3a1d1b; }
+  .mk.hit.yel { border-color: var(--accent); background: #3a3220; }
+  .mk:hover { transform: scale(1.25); }
+  .mk .tip { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); font: 600 14px var(--mono); color: #6f7a80; white-space: nowrap; }
+  .mk.hit .tip { color: #aab4b9; }
+</style>
+</head>
+<body>
+<div id="vp">
+  <canvas id="gl" width="1920" height="1080"></canvas>
+  <div id="labels"></div>
+  <div id="scan"></div>
+  <div class="corner c-tl"></div><div class="corner c-tr"></div><div class="corner c-bl"></div><div class="corner c-br"></div>
+  <div id="top">
+    <div class="k" id="kick"></div>
+    <div class="t" id="ttl"></div>
+    <div class="s" id="sub"></div>
+    <div id="cases"></div>
+  </div>
+  <div id="mock" data-i="mock"></div>
+  <div id="lang"><button data-l="en">EN</button><button data-l="fr">FR</button><button data-l="ko">한국어</button></div>
+  <div id="note" data-i="note"></div>
+  <div id="panel">
+    <h3><span data-i="sum"></span><b id="status">TRACING</b></h3>
+    <div id="rows"></div>
+    <div id="act" data-at="16.6"><button class="btn go" id="b1">Alert the exchange</button><button class="btn" id="b2" data-i="export"></button></div>
+  </div>
+  <div id="detail"><div class="dk"><em id="dk" style="font-style:normal"></em><span id="dx" data-i="close"></span></div><div class="dt" id="dt"></div><div class="dd" id="dd"></div></div>
+  <div id="readout"></div>
+  <div id="graph"><svg id="gsvg" viewBox="0 0 1150 500" width="1150" height="500"></svg></div>
+  <div id="viewSw"><button data-v="globe" data-i="vGlobe"></button><button data-v="graph" data-i="vGraph"></button></div>
+  <div id="swarm"><b id="swn"></b><span id="swl"></span></div>
+  <div id="tl">
+    <div id="tlTop"><button id="play" title="Play the whole case">▶</button><div id="clock"></div><div id="evt"></div><div id="hint" data-i="hint"></div></div>
+    <div id="track"><div id="rail"></div><div id="fill"></div><div id="marks"></div><div id="head"></div></div>
+  </div>
+  <div id="bar">
+    <div id="cap"></div>
+    <div id="ctrl">
+      <button class="cb" id="back" data-i="back"></button>
+      <div class="dots" id="dots"></div>
+      <button class="cb pri" id="next" data-i="next"></button>
+      <button class="cb" id="reset" data-i="reset"></button>
+    </div>
+  </div>
+  <div id="modal"><div class="card">
+    <div class="k2" id="mk"></div>
+    <h2 id="mt"></h2>
+    <div id="mf"></div>
+    <div class="note" data-i="mnote"></div>
+    <div class="row2"><button class="btn go" id="approve" data-i="approve"></button><button class="btn" id="cancel" data-i="cancel"></button></div>
+  </div></div>
+  <div id="real"><div class="card">
+    <div class="k2" id="rk"></div>
+    <h2 id="rt"></h2>
+    <div class="who" id="rw"></div>
+    <div class="stats" id="rs"></div>
+    <div class="rcols"><div><div class="rh" data-i="what"></div><div class="rtl" id="rl"></div></div>
+      <div><div class="rh" id="rht"></div><div class="rhelp" id="rhl"></div><div class="rq" id="rqt"></div></div></div>
+    <div class="fine" data-i="fine"></div>
+    <div class="row2"><a class="btn go" id="rlink" target="_blank" rel="noopener" data-i="read"></a><button class="btn" id="rclose" data-i="backDemo"></button></div>
+  </div></div>
+  <div id="toast"></div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
+<script src="vendor/countries-50m.js"></script>
+<script src="vendor/textures.js"></script>
+<script>
+const W = 1920, H = 1080;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const inOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const outBack = x => { const c = 1.6; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const D2R = Math.PI / 180, R = 1;
+const $ = id => document.getElementById(id);
+
+// scale the 1920x1080 stage to the window
+const vpEl = $('vp'); let scale = 1;
+function fit() { scale = Math.min(innerWidth / W, innerHeight / H); vpEl.style.transform = `scale(${scale}) translate(-50%, -50%)`; }
+addEventListener('resize', fit); fit();
+
+function v3(lat, lon, r = R) { const p = lat * D2R, l = lon * D2R; return new THREE.Vector3(r * Math.cos(p) * Math.sin(l), r * Math.sin(p), r * Math.cos(p) * Math.cos(l)); }
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(W, H, false);
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(30, W / H, .1, 100);
+const globe = new THREE.Group();
+const tilt = new THREE.Group(); tilt.add(globe); scene.add(tilt);
+
+// earth: NASA Blue Marble + Black Marble city lights, graded cool to sit in the dark UI
+const tl = new THREE.TextureLoader(), aniso = renderer.capabilities.getMaxAnisotropy();
+const tex = k => { const x = tl.load(TEX[k]); x.anisotropy = aniso; return x; };
+const earthMat = new THREE.ShaderMaterial({
+  uniforms: { day: { value: tex('day') }, night: { value: tex('night') }, water: { value: tex('water') }, topo: { value: tex('topo') }, L: { value: new THREE.Vector3(-.55, .45, .7).normalize() } },
+  vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+    void main(){ vUv = uv; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform sampler2D day, night, water, topo; uniform vec3 L; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+    void main(){
+      vec3 N = normalize(vN), V = normalize(vV);
+      vec3 d = texture2D(day, vUv).rgb;
+      float lum = dot(d, vec3(.299, .587, .114));
+      vec3 g = mix(vec3(lum), d, .5) * vec3(.66, .8, .9);
+      float e = 1. / 2048.;
+      float hx = texture2D(topo, vUv + vec2(e, 0.)).r - texture2D(topo, vUv - vec2(e, 0.)).r;
+      float hy = texture2D(topo, vUv + vec2(0., e)).r - texture2D(topo, vUv - vec2(0., e)).r;
+      float relief = clamp(1. + (-hx + hy) * 5., .7, 1.35);
+      float lam = clamp(dot(N, L), 0., 1.);
+      vec3 col = g * relief * (.3 + .9 * lam);
+      float w = texture2D(water, vUv).r;
+      col += vec3(.65, .82, 1.) * pow(max(dot(reflect(-L, N), V), 0.), 36.) * w * .45;
+      col += texture2D(night, vUv).rgb * vec3(1., .78, .42) * (1. - smoothstep(0., .45, lam)) * .85;
+      col += vec3(.32, .55, .72) * pow(1. - max(dot(N, V), 0.), 3.) * .7;
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 192, 128), earthMat);
+earth.rotation.y = -Math.PI / 2; // texture u=0.5 (lon 0) faces +z, matching v3()
+globe.add(earth);
+// atmosphere halo
+const rim = new THREE.Mesh(new THREE.SphereGeometry(R * 1.08, 128, 96), new THREE.ShaderMaterial({
+  transparent: true, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: 'varying vec3 n; void main(){ n = normalize(normalMatrix*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+  fragmentShader: 'varying vec3 n; void main(){ float a = pow(clamp(0.78 - abs(n.z), 0., 1.), 2.6); gl_FragColor = vec4(0.38,0.62,0.85, 1.) * a * 1.1; }'
+}));
+scene.add(rim);
+
+const gratMat = new THREE.LineBasicMaterial({ color: 0x7f97a3, transparent: true, opacity: .08, depthWrite: false });
+for (let lat = -60; lat <= 60; lat += 30) { const pts = []; for (let lon = -180; lon <= 180; lon += 2) pts.push(v3(lat, lon, 1.0015)); globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gratMat)); }
+for (let lon = -180; lon < 180; lon += 30) { const pts = []; for (let lat = -90; lat <= 90; lat += 2) pts.push(v3(lat, lon, 1.0015)); globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gratMat)); }
+
+// country borders and coastlines (Natural Earth 50m)
+function meshLines(ml, mat) {
+  const pos = [];
+  for (const line of ml.coordinates) for (let i = 1; i < line.length; i++) {
+    const a = v3(line[i - 1][1], line[i - 1][0], 1.002), b = v3(line[i][1], line[i][0], 1.002);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  globe.add(new THREE.LineSegments(g, mat));
+}
+meshLines(topojson.mesh(COUNTRIES, COUNTRIES.objects.countries, (a, b) => a !== b), new THREE.LineBasicMaterial({ color: 0xc9d6dc, transparent: true, opacity: .2, depthWrite: false }));
+meshLines(topojson.mesh(COUNTRIES, COUNTRIES.objects.countries, (a, b) => a === b), new THREE.LineBasicMaterial({ color: 0x9fc3d3, transparent: true, opacity: .32, depthWrite: false }));
+
+let ready = false;
+THREE.DefaultLoadingManager.onLoad = () => { if (!ready) buildMask().then(() => { ready = true; loadCase(0); }); };
+
+// --- the cases (all made-up). Every case shares one timeline: origins -> hub -> cash-out -> act.
+const RED = 0xe5564b, YEL = 0xffce54, GRN = 0x8fd3b0;
+const CASES = [
+  {
+    tab: 'USSS · Pig-butchering', chains: 'NOT STATED', kick: 'Demo · USSS San Francisco case', title: 'Pig-butchering: $5.5M lost', sub: "A visual illustration of TRM's public case study",
+    events: [
+      { t: 2.4, when: 'Aug 2022', tip: 'AUG 22', name: 'A scammer contacts the victim on a real estate app' },
+      { t: 3.6, when: 'Late 2022', tip: '2022', name: 'The victim sends $200K to a fake trading platform' },
+      { t: 6.2, when: 'Late 2022', tip: '2022', name: '$1.1M more goes in · family members join' },
+      { t: 8.6, when: 'Late Dec 2022', tip: 'DEC 22', name: 'The victim pays a $200K "withdrawal tax"' },
+      { t: 12.1, when: 'Late Dec 2022', tip: 'DEC 22', name: 'The funds go dormant in an unhosted wallet' },
+      { t: 13.2, when: 'Late Feb', tip: 'FEB', name: 'Alert: the funds move toward an off-ramp', yel: true },
+      { t: 17.6, when: 'Late Feb', tip: 'SAME DAY', name: 'Alert ready to share with USSS', yel: true },
+    ],
+    pins: {
+      v1:  { lat: 39, lon: -98, name: 'Victims · 7', sub: 'US · $5.5M sent', role: 'victim', row: 0, t: [2.4, 2.8, 9.2] },
+      hub: { lat: 14, lon: -150, name: 'Fake trading platform', sub: 'wallets · location not public', row: 1, src: 1, t: [8.6, 9.0, 99] },
+      end: { lat: 44, lon: -158, name: 'Off-ramp', sub: 'alert fired · location not public', yel: true, row: 3, src: 3, t: [13.2, 13.6, 99] },
+    },
+    swarm: { n: 7, final: '7', label: 'victims · one dot each · positions illustrative', box: [30, 47, -122, -75], arcs: 7, arcT: [3.2, 8.4], t: [2.4, 3.6], size: .045 },
+    arcs: [['hub', 'end', 10.8, 13.4, 'yel']],
+    mid: { at: .45, dx: -190, dy: -80, name: 'Unhosted wallet', sub: 'dormant from late Dec 2022', row: 2, src: 2, t: [12.1, 12.3, 99] },
+    cam: [{ t: 0, lon: -100, lat: 30, d: 6.0 }, { t: 3, lon: -100, lat: 30, d: 5.6 }, { t: 8.6, lon: -128, lat: 24, d: 5.6 },
+          { t: 10.4, lon: -128, lat: 24, d: 5.6 }, { t: 13.8, lon: -140, lat: 30, d: 5.4 }, { t: 14, lon: -140, lat: 30, d: 5.4 }, { t: 17.5, lon: -140, lat: 32, d: 5.0 }],
+    rows: [
+      ['Victims', '7 victims · $5.5M', 'romance scam → fake investment'],
+      ['Platform', 'Fake trading platform', 'first contact on a real estate app', 1],
+      ['Hold', 'Unhosted wallet', 'dormant from late Dec 2022', 2],
+      ['Off-ramp', 'Funds move · alert fires', 'address-level tracing', 3],
+    ],
+    big: { k: 'Recovered', v: 5e6 },
+    info: {
+      v1: ['Victims', '7 victims · $5.5M', 'A victim and several family members lost $5.5M. A romance scam turned into an investment scam.'],
+      1: ['Source 1 · TRM case study', 'Fake trading platform', 'The scammer met the victim on a real estate app. The victim sent $200K, then $1.1M more. Family members also invested.'],
+      2: ['Source 2 · TRM case study', 'Unhosted wallet', 'In late December 2022 the victim paid a $200K "withdrawal tax." The funds then sat dormant in an unhosted wallet.'],
+      3: ['Source 3 · TRM case study', 'Alert on the move', 'Investigators watched the wallet. In late February an alert fired as the funds moved toward an off-ramp.'],
+    },
+    action: 'Share with USSS',
+    modal: { k: 'Alert · funds moving', t: 'USSS San Francisco · case team', f: [['Wallet', 'Monitored unhosted wallet'], ['Funds', "About $5M of the victims' $5.5M"], ['Basis', "Address-level trace of the victims' exact funds"], ['Next', 'USSS prepares a seizure warrant']] },
+    share: 'US Secret Service · San Francisco Field Office',
+    agencies: [{ lat: 37.77, lon: -122.42, dx: 40, name: 'US Secret Service', sub: 'San Francisco Field Office', info: ['Agency', 'USSS San Francisco', 'USSS secured a seizure warrant within hours of the alert. About $5M was recovered.'] }],
+    hcam: { lon: -135, lat: 36, d: 6.0 },
+    done: { toast: 'Shared with USSS (demo, nothing sent)', line: 'Real outcome: seizure warrant within hours · $5M recovered', cap: 'USSS secured a seizure warrant within hours. About $5M of the $5.5M was recovered.' },
+    steps: [
+      ['Step 1 · The scam', 'A scammer meets the victim on a real estate app. Seven victims send $5.5M in total.'],
+      ['Step 2 · Into a fake platform', 'The money goes to a fake trading platform. Click SRC 1 to see how it started.'],
+      ['Step 3 · The funds go quiet', 'After a $200K "withdrawal tax," the funds sit dormant in an unhosted wallet.'],
+      ['Step 4 · The alert', 'In late February the funds move toward an off-ramp. A TRM alert fires.'],
+      ['Step 5 · Act fast', 'Send the alert to USSS. Click "Share with USSS" to review it.'],
+    ],
+    real: {
+      chip: 'USSS case study', src: 'TRM case study · Aug 2022', url: 'https://www.trmlabs.com/resources/case-studies/usss',
+      title: 'USSS pig-butchering investigation leads to $5M+ seizure', who: 'US Secret Service · San Francisco Field Office',
+      stats: [['$5.5M', 'lost by 7 victims'], ['$5M', 'recovered'], ['Hours', 'from alert to seizure warrant']],
+      tl: [['Late summer 2022', 'A scammer meets the victim on a real estate app.'], ['Next weeks', 'The victim sends $200K, then $1.1M more. Family members join.'],
+           ['Late Dec 2022', 'The victim pays a $200K "withdrawal tax." The funds go quiet in an unhosted wallet.'], ['Late Feb', 'An alert fires when the funds move toward an off-ramp.'], ['Within hours', 'USSS gets a seizure warrant.']],
+      helpT: 'How TRM helped', help: ['TRM Forensics', 'Alerts on monitored wallets, including an unhosted wallet', "Address-level tracing to isolate the victims' exact funds"],
+      quote: 'Using data from the blockchain, combined with other evidence, the team secured a seizure warrant within hours.' },
+  },
+  {
+    tab: 'LockBit · Ransomware', chains: 'BTC', kick: 'Demo · LockBit charges', title: 'LockBit ransomware: 1,400+ attacks', sub: "A visual illustration of TRM's public blog post",
+    events: [
+      { t: 2.4, when: 'Up to Jun 2023', tip: 'ATTACKS', name: '1,400+ LockBit attacks in the US and worldwide' },
+      { t: 6.0, when: 'Up to Jun 2023', tip: 'RANSOMS', name: '$100M+ demanded · tens of millions paid in BTC' },
+      { t: 12.1, when: 'Date not public', tip: 'TRACE', name: "Part of one victim's ransom traced", yel: true },
+      { t: 13.2, when: 'Nov 2022', tip: 'NOV 22', name: 'A LockBit actor is charged in New Jersey' },
+      { t: 15.0, when: 'May 2023', tip: 'MAY 23', name: 'Another is indicted (LockBit, Babuk, Hive)' },
+      { t: 17.6, when: 'Jun 2023', tip: 'JUN 23', name: 'A Russian national is arrested and charged', yel: true },
+    ],
+    pins: {
+      v1:  { lat: 39, lon: -95, name: 'LockBit victims', sub: 'US and worldwide · 1,400+ attacks', role: 'victim', row: 0, t: [2.4, 2.8, 9.2] },
+      hub: { lat: 24, lon: -60, name: 'Ransom payments', sub: 'bitcoin · location not public', row: 1, src: 1, t: [8.6, 9.0, 99] },
+      end: { lat: 36, lon: -36, name: 'Suspect-controlled address', sub: 'location not public', yel: true, row: 3, src: 3, t: [13.2, 13.6, 99] },
+    },
+    swarm: { n: 1400, final: '1,400+', label: 'LockBit attacks · one dot each · positions illustrative', box: [-45, 65, -170, 180], arcs: 90, arcT: [3.2, 8.6], t: [2.4, 7.0], size: .024 },
+    arcs: [['hub', 'end', 10.8, 13.4, 'yel']],
+    mid: { at: .5, dx: 20, dy: 30, name: 'Part of one ransom', sub: 'traced by law enforcement', row: 2, src: 2, t: [12.1, 12.3, 99] },
+    cam: [{ t: 0, lon: -75, lat: 30, d: 6.2 }, { t: 3, lon: -75, lat: 30, d: 5.9 }, { t: 8.6, lon: -55, lat: 32, d: 5.6 },
+          { t: 10.4, lon: -55, lat: 32, d: 5.6 }, { t: 13.8, lon: -40, lat: 38, d: 5.4 }, { t: 14, lon: -40, lat: 38, d: 5.4 }, { t: 17.5, lon: -40, lat: 40, d: 5.0 }],
+    rows: [
+      ['Attacks', '1,400+ LockBit attacks', 'US and worldwide'],
+      ['Ransoms', '$100M+ demanded', 'tens of millions paid in bitcoin', 1],
+      ['Trace', 'Part of one ransom payment', 'traced by law enforcement', 2],
+      ['Suspect', 'Russian national · charged', 'the payment reached his address', 3],
+    ],
+    big: { k: 'Agencies', v: 15, n: true },
+    info: {
+      v1: ['Victims', 'LockBit victims', 'The US complaint says LockBit actors ran more than 1,400 attacks against victims in the US and around the world.'],
+      1: ['Source 1 · TRM blog', 'Ransom payments', 'Over $100M was demanded. Victims paid at least tens of millions of dollars in bitcoin.'],
+      2: ['Source 2 · TRM blog', 'Ransom traced', '"In at least one circumstance, law enforcement was able to trace a portion of a victim\'s ransom payment" to an address the suspect controlled.'],
+      3: ['Source 3 · TRM blog', 'Charges', 'A Russian national was arrested and charged in June 2023 for deploying LockBit. Two other LockBit actors were charged in Nov 2022 and May 2023.'],
+    },
+    action: 'Share case file',
+    modal: { k: 'Case file · draft', t: 'Partner agencies · 15 named', f: [['Trace', 'Part of one ransom → suspect-controlled address'], ['Scale', '1,400+ attacks · $100M+ demanded'], ['Basis', 'Blockchain trace plus the US complaint']] },
+    share: 'Agencies in the US, UK, Germany, France, Switzerland, Sweden, Japan and the EU',
+    agencies: [
+      { lat: 38.9, lon: -77.0, dx: -60, name: 'DOJ · FBI · IRS-CI', sub: 'United States', info: ['Agency', 'US agencies', 'The post names the DOJ, FBI and IRS-CI, plus Jersey City Police and New Jersey State Police.'] },
+      { lat: 51.5, lon: -0.1, dx: -60, dy: -50, name: 'National Crime Agency', sub: 'United Kingdom', info: ['Agency', 'UK agencies', 'The post names the National Crime Agency and the South West Regional Organised Crime Unit.'] },
+      { lat: 52.08, lon: 4.3, dx: 150, dy: -10, name: 'Europol EC3 · Eurojust', sub: 'The Hague · EU', info: ['Agency', 'EU agencies', "The post names Europol's European Cybercrime Centre and Eurojust."] },
+      { lat: 50.08, lon: 8.24, dx: 80, dy: 70, name: 'BKA · LKA', sub: 'Germany', info: ['Agency', 'German agencies', 'The post names the Bundeskriminalamt and the Landeskriminalamt Schleswig-Holstein.'] },
+      { lat: 48.86, lon: 2.35, nolabel: true, name: 'Gendarmerie', sub: 'France', info: ['Agency', 'France', "The post names France's Gendarmerie Nationale Cyberspace Command."] },
+      { lat: 47.37, lon: 8.54, nolabel: true, name: 'Kantonspolizei Zürich', sub: 'Switzerland', info: ['Agency', 'Switzerland', 'The post names Kantonspolizei Zürich.'] },
+      { lat: 59.33, lon: 18.07, nolabel: true, name: 'Swedish Police', sub: 'Sweden', info: ['Agency', 'Sweden', 'The post names the Swedish Police Authority.'] },
+      { lat: 35.68, lon: 139.69, nolabel: true, name: 'National Police Agency', sub: 'Japan', info: ['Agency', 'Japan', 'The post names the National Police Agency of Japan.'] },
+    ],
+    hcam: { lon: -28, lat: 42, d: 6.9 },
+    done: { toast: 'Case file shared (demo, nothing sent)', line: 'Real outcome: 15 agencies named across 7 countries and the EU', cap: 'The post names 15 agencies across 7 countries and the EU. A Russian national was arrested and charged in June 2023.' },
+    steps: [
+      ['Step 1 · The attacks', 'LockBit actors hit more than 1,400 victims in the US and worldwide.'],
+      ['Step 2 · Ransoms paid', 'Over $100M is demanded. Victims pay tens of millions in bitcoin. Click SRC 1.'],
+      ['Step 3 · Follow one payment', "Law enforcement traces part of one victim's ransom payment. Click SRC 2."],
+      ['Step 4 · The suspect', 'The trail reaches an address the suspect controlled. Charges follow.'],
+      ['Step 5 · Share the case', 'Agencies in 7 countries and the EU worked the case. Click "Share case file".'],
+    ],
+    real: {
+      chip: 'TRM post', src: 'TRM blog · June 2023', url: 'https://trmlabs.com/post/u-s-authorities-arrest-russian-national-for-ransomware-attacks',
+      title: 'U.S. authorities arrest Russian national for ransomware attacks', who: 'LockBit ransomware · charges announced by the US DOJ',
+      stats: [['1,400+', 'LockBit attacks worldwide'], ['$100M+', 'ransom demanded'], ['Tens of $M', 'paid in bitcoin']],
+      tl: [['Nov 2022', 'A LockBit actor is charged in New Jersey.'], ['May 2023', 'Another is indicted for LockBit, Babuk and Hive attacks.'], ['June 2023', 'A Russian national is arrested and charged for LockBit attacks.']],
+      helpT: 'Agencies named in the post', help: ['US DOJ · FBI · IRS-CI', 'Europol EC3 · Eurojust', 'UK National Crime Agency', 'Germany BKA · Japan National Police Agency', 'France Gendarmerie · Swiss and Swedish police'],
+      quote: "In at least one circumstance, law enforcement was able to trace a portion of a victim's ransom payment…" },
+  },
+  {
+    tab: 'Bybit · Exchange hack', chains: 'ETH', kick: 'Demo · Bybit hack', title: 'Bybit hack: ~$1.5B stolen', sub: "A visual illustration of TRM's public blog post",
+    events: [
+      { t: 2.4, when: 'Feb 2025', tip: 'HACK', name: 'Offline cold wallet compromised · ~$1.5B stolen' },
+      { t: 8.6, when: 'Feb 2025', tip: 'TAGGED', name: 'TRM tags the addresses "Hacked" and "Stolen Funds"' },
+      { t: 10.4, when: 'Feb 2025', tip: 'TRACKED', name: 'Tracking entity "Bybit Exploiter Feb 2025" set up' },
+      { t: 13.2, when: 'Feb 2025', tip: 'ATTRIBUTED', name: 'TRM links the hack to North Korea', yel: true },
+      { t: 17.6, when: 'Feb 2025', tip: 'SHARE', name: 'Attribution ready to share', yel: true },
+    ],
+    pins: {
+      v1:  { lat: 25.2, lon: 55.3, name: 'Bybit · cold wallet', sub: '~$1.5B in Ethereum tokens', role: 'victim', row: 0, t: [2.4, 2.8, 9.2] },
+      hub: { lat: 8, lon: 82, name: 'Hacker addresses', sub: 'tagged · location not public', row: 1, src: 1, t: [8.6, 9.0, 99] },
+      end: { lat: 39.0, lon: 125.75, name: 'Attributed: North Korea', sub: 'high confidence', yel: true, row: 3, src: 3, t: [13.2, 13.6, 99] },
+    },
+    arcs: [['v1', 'hub', 3.2, 8.4], ['hub', 'end', 10.8, 13.4, 'yel']],
+    mid: { at: .5, dx: 150, dy: 20, tag: 'Evidence', name: 'Address overlaps', sub: 'with past North Korean thefts', row: 3, src: 3, t: [12.1, 12.3, 99] },
+    cam: [{ t: 0, lon: 55, lat: 25, d: 6.0 }, { t: 3, lon: 55, lat: 25, d: 5.8 }, { t: 8.6, lon: 75, lat: 18, d: 5.7 },
+          { t: 10.4, lon: 75, lat: 18, d: 5.7 }, { t: 13.8, lon: 100, lat: 28, d: 5.4 }, { t: 14, lon: 100, lat: 28, d: 5.4 }, { t: 17.5, lon: 100, lat: 30, d: 5.0 }],
+    rows: [
+      ['Victim', 'Bybit · offline cold wallet', '~$1.5B in Ethereum tokens'],
+      ['Tagged', '"Hacked" · "Stolen Funds"', 'applied to the hacker addresses', 1],
+      ['Tracking', '"Bybit Exploiter Feb 2025"', 'real-time tracking entity', 2],
+      ['Attribution', 'North Korea · high confidence', 'address overlaps with past thefts', 3],
+    ],
+    big: { k: 'Stolen', v: 1.5e9, approx: true },
+    info: {
+      v1: ['Victim', 'Bybit cold wallet', "Attackers compromised one of Bybit's offline cold wallets. About $1.5B in Ethereum tokens was stolen, the largest exploit on record."],
+      1: ['Source 1 · TRM blog', 'Labels', 'TRM quickly tagged the hacker addresses "Hacked" or "Stolen Funds."'],
+      2: ['Source 2 · TRM blog', 'Tracking entity', 'TRM created the entity "Bybit Exploiter Feb 2025" to monitor the stolen assets in real time.'],
+      3: ['Source 3 · TRM blog', 'Attribution', 'TRM found "substantial overlaps observed between addresses controlled by the Bybit hackers" and addresses tied to past North Korean thefts.'],
+    },
+    action: 'Share attribution',
+    modal: { k: 'Attribution · draft', t: 'Law enforcement partners', f: [['Finding', 'North Korea · high confidence'], ['Basis', 'Address overlaps with past North Korean thefts'], ['Watch', '"Bybit Exploiter Feb 2025" tracks the funds']] },
+    share: 'FBI and partner agencies',
+    agencies: [{ lat: 38.9, lon: -77.0, name: 'FBI', sub: 'United States', info: ['Agency', 'FBI', 'The FBI publicly linked the Bybit hack to North Korea on Feb 26, 2025.'] }],
+    hcam: { lon: 175, lat: 62, d: 7.0 },
+    done: { toast: 'Attribution shared (demo, nothing sent)', line: 'Real outcome: the FBI linked the hack to North Korea on Feb 26, 2025', cap: 'TRM published the North Korea link. The FBI publicly linked the hack to North Korea on Feb 26, 2025.' },
+    steps: [
+      ['Step 1 · The hack', 'Attackers drain an offline cold wallet at Bybit. About $1.5B in Ethereum tokens is gone.'],
+      ['Step 2 · Tag the addresses', 'TRM tags the hacker addresses "Hacked" and "Stolen Funds." Click SRC 1.'],
+      ['Step 3 · Track in real time', 'A tracking entity follows the stolen funds as they move. Click SRC 2.'],
+      ['Step 4 · Attribution', 'Address overlaps with past thefts point to North Korea, with high confidence.'],
+      ['Step 5 · Share it', 'Click "Share attribution" to send the finding to law enforcement.'],
+    ],
+    real: {
+      chip: 'TRM post', src: 'TRM blog · Feb 2025', url: 'https://www.trmlabs.com/resources/blog/trm-links-north-korea-to-record-1-5-billion-record-hack',
+      title: 'TRM links North Korea to record $1.5 billion hack', who: 'Bybit exchange · offline cold wallet compromised',
+      stats: [['~$1.5B', 'in Ethereum tokens stolen'], ['#1', 'largest exploit on record'], ['~$800M', "North Korea's 2024 total, nearly doubled in one day"]],
+      tl: [['Feb 2025', "Attackers compromise one of Bybit's offline cold wallets."], ['Right after', 'TRM tags the addresses "Hacked" and "Stolen Funds."'],
+           ['Right after', 'A tracking entity follows the stolen funds in real time.'], ['Feb 20, 2025', 'TRM links the hack to North Korea with high confidence.']],
+      helpT: 'How TRM tracked it', help: ['Labels: "Hacked" and "Stolen Funds"', 'Tracking entity: "Bybit Exploiter Feb 2025"', 'Attribution from address overlaps with past North Korean thefts'],
+      quote: 'substantial overlaps observed between addresses controlled by the Bybit hackers…' },
+  },
+];
+// --- languages: UI strings plus per-case overrides (same shape as CASES; anything missing falls back to English)
+const UI = {
+  en: { mock: "Demo · a visual illustration of TRM's public case studies · by Elbert Ballo", note: "Wallet positions are illustrative · TRM's product uses a graph view", sum: 'Case summary',
+    tracing: 'TRACING', awaiting: 'AWAITING APPROVAL', shared: 'SHARED', export: 'Export report', close: 'Close ✕', hint: 'Drag to spin · scroll to zoom',
+    back: '← Back', next: 'Next →', reset: 'Reset view', mnote: 'An investigator approves before anything is sent. Demo only: nothing leaves this page.',
+    approve: 'Approve and share', cancel: 'Cancel', what: 'What happened', fine: "Facts from TRM's public page. Wallet positions on the globe are illustrative.",
+    read: 'Read it on trmlabs.com ↗', backDemo: 'Back to the demo', sources: 'Sources', shareWith: 'Share with', drafted: 'Drafted by',
+    draftedV: 'AI agent · every claim links to a source', src: 'Source: ', realK: 'Real case · ', outcome: 'Outcome', found: 'Found', event: 'Event',
+    starting: 'Starting', startingT: 'Public case, step by step', sharedB: 'Shared', realOut: 'Real outcome', exportT: 'Report export is not part of this demo', chains: 'CHAINS', vGlobe: 'Globe', vGraph: 'Graph' },
+  fr: { mock: 'Démo · illustration visuelle des études de cas publiques de TRM · par Elbert Ballo', note: 'Positions des portefeuilles indicatives · le produit TRM utilise une vue en graphe', sum: 'Résumé du dossier',
+    tracing: 'TRAÇAGE', awaiting: 'À VALIDER', shared: 'PARTAGÉ', export: 'Exporter le rapport', close: 'Fermer ✕', hint: 'Glisser pour tourner · molette pour zoomer',
+    back: '← Retour', next: 'Suivant →', reset: 'Recentrer', mnote: 'Un enquêteur valide avant tout envoi. Démo uniquement : rien ne quitte cette page.',
+    approve: 'Valider et partager', cancel: 'Annuler', what: 'Les faits', fine: 'Faits tirés de la page publique de TRM. Les positions des portefeuilles sur le globe sont indicatives.',
+    read: 'Lire sur trmlabs.com (en anglais) ↗', backDemo: 'Retour à la démo', sources: 'Sources', shareWith: 'Partager avec', drafted: 'Rédigé par',
+    draftedV: 'Agent IA · chaque affirmation renvoie à une source', src: 'Source : ', realK: 'Cas réel · ', outcome: 'Résultat', found: 'Trouvé', event: 'Événement',
+    starting: 'Début', startingT: 'Cas public, étape par étape', sharedB: 'Partagé', realOut: 'Résultat réel', exportT: "L'export du rapport ne fait pas partie de cette démo", chains: 'CHAÎNES', vGlobe: 'Globe', vGraph: 'Graphe' },
+  ko: { mock: '데모 · TRM 공개 사례 연구의 시각적 일러스트 · 제작 Elbert Ballo', note: '지갑 위치는 예시입니다 · TRM 제품은 그래프 뷰를 사용합니다', sum: '사건 요약',
+    tracing: '추적 중', awaiting: '승인 대기', shared: '공유됨', export: '보고서 내보내기', close: '닫기 ✕', hint: '드래그로 회전 · 스크롤로 확대',
+    back: '← 이전', next: '다음 →', reset: '시점 초기화', mnote: '전송 전에 반드시 수사관이 승인합니다. 데모 전용: 이 페이지 밖으로 아무것도 전송되지 않습니다.',
+    approve: '승인 후 공유', cancel: '취소', what: '사건 경과', fine: 'TRM 공개 페이지의 사실입니다. 지구본 위 지갑 위치는 예시입니다.',
+    read: 'trmlabs.com에서 보기 (영문) ↗', backDemo: '데모로 돌아가기', sources: '출처', shareWith: '공유 대상', drafted: '작성',
+    draftedV: 'AI 에이전트 · 모든 주장에 출처 연결', src: '출처: ', realK: '실제 사례 · ', outcome: '결과', found: '발견', event: '이벤트',
+    starting: '시작', startingT: '공개 사례를 단계별로', sharedB: '공유됨', realOut: '실제 결과', exportT: '보고서 내보내기는 이 데모에 포함되지 않습니다', chains: '체인', vGlobe: '지구본', vGraph: '그래프' },
+};
+const TR = {
+  fr: [
+    { tab: 'USSS · Pig butchering', chains: 'NON PRÉCISÉ', kick: 'Démo · cas USSS San Francisco', title: 'Pig butchering : 5,5 M$ perdus', sub: "Illustration visuelle de l'étude de cas publique de TRM",
+      events: [
+        { when: 'Août 2022', tip: 'AOÛT 22', name: 'Un escroc contacte la victime via une appli immobilière' },
+        { when: 'Fin 2022', tip: '2022', name: 'La victime envoie 200 k$ à une fausse plateforme de trading' },
+        { when: 'Fin 2022', tip: '2022', name: '1,1 M$ de plus · des proches investissent aussi' },
+        { when: 'Fin déc. 2022', tip: 'DÉC. 22', name: 'La victime paie une « taxe de retrait » de 200 k$' },
+        { when: 'Fin déc. 2022', tip: 'DÉC. 22', name: 'Les fonds dorment dans un portefeuille non hébergé' },
+        { when: 'Fin février', tip: 'FÉV.', name: 'Alerte : les fonds partent vers une passerelle de sortie' },
+        { when: 'Fin février', tip: 'MÊME JOUR', name: "Alerte prête à partager avec l'USSS" },
+      ],
+      pins: { v1: { name: 'Victimes · 7', sub: 'États-Unis · 5,5 M$ envoyés' }, hub: { name: 'Fausse plateforme de trading', sub: 'portefeuilles · lieu non public' }, end: { name: 'Passerelle de sortie', sub: 'alerte déclenchée · lieu non public' } },
+      mid: { name: 'Portefeuille non hébergé', sub: 'inactif depuis fin déc. 2022' },
+      rows: [['Victimes', '7 victimes · 5,5 M$', 'arnaque sentimentale → faux investissement'], ['Plateforme', 'Fausse plateforme de trading', 'premier contact via une appli immobilière'],
+             ['Attente', 'Portefeuille non hébergé', 'inactif depuis fin déc. 2022'], ['Sortie', 'Les fonds bougent · alerte', 'traçage au niveau des adresses']],
+      big: { k: 'Récupérés' },
+      info: {
+        v1: ['Victimes', '7 victimes · 5,5 M$', "Une victime et plusieurs membres de sa famille ont perdu 5,5 M$. Une arnaque sentimentale s'est muée en arnaque à l'investissement."],
+        1: ['Source 1 · étude de cas TRM', 'Fausse plateforme de trading', "L'escroc a rencontré la victime sur une appli immobilière. La victime a envoyé 200 k$, puis 1,1 M$ de plus. Des proches ont aussi investi."],
+        2: ['Source 2 · étude de cas TRM', 'Portefeuille non hébergé', 'Fin décembre 2022, la victime a payé une « taxe de retrait » de 200 k$. Les fonds sont ensuite restés inactifs dans un portefeuille non hébergé.'],
+        3: ['Source 3 · étude de cas TRM', 'Alerte en mouvement', "Les enquêteurs surveillaient le portefeuille. Fin février, une alerte s'est déclenchée quand les fonds sont partis vers une passerelle de sortie."],
+      },
+      action: "Partager avec l'USSS",
+      modal: { k: 'Alerte · fonds en mouvement', t: "USSS San Francisco · équipe d'enquête", f: [['Portefeuille', 'Portefeuille non hébergé surveillé'], ['Fonds', 'Environ 5 M$ sur les 5,5 M$ des victimes'], ['Base', 'Traçage au niveau des adresses des fonds exacts des victimes'], ['Suite', "L'USSS prépare un mandat de saisie"]] },
+      share: 'US Secret Service · bureau de San Francisco',
+      agencies: [{ name: 'US Secret Service', sub: 'Bureau de San Francisco', info: ['Agence', 'USSS San Francisco', "L'USSS a obtenu un mandat de saisie quelques heures après l'alerte. Environ 5 M$ ont été récupérés."] }],
+      done: { toast: "Partagé avec l'USSS (démo, rien n'est envoyé)", line: 'Résultat réel : mandat de saisie en quelques heures · 5 M$ récupérés', cap: "L'USSS a obtenu un mandat de saisie en quelques heures. Environ 5 M$ sur 5,5 M$ ont été récupérés." },
+      steps: [["Étape 1 · L'arnaque", 'Un escroc rencontre la victime sur une appli immobilière. Sept victimes envoient 5,5 M$ au total.'],
+              ['Étape 2 · Vers une fausse plateforme', "L'argent part vers une fausse plateforme de trading. Cliquez sur SRC 1 pour voir le début."],
+              ['Étape 3 · Les fonds dorment', 'Après une « taxe de retrait » de 200 k$, les fonds dorment dans un portefeuille non hébergé.'],
+              ["Étape 4 · L'alerte", 'Fin février, les fonds partent vers une passerelle de sortie. Une alerte TRM se déclenche.'],
+              ['Étape 5 · Agir vite', "Envoyez l'alerte à l'USSS. Cliquez sur « Partager avec l'USSS » pour la relire."]],
+      swarm: { label: 'victimes · un point chacune · positions indicatives' },
+      real: { chip: 'étude de cas USSS', src: 'Étude de cas TRM · août 2022', title: "Une enquête de l'USSS sur du pig butchering mène à une saisie de plus de 5 M$", who: 'US Secret Service · bureau de San Francisco',
+        stats: [['5,5 M$', 'perdus par 7 victimes'], ['5 M$', 'récupérés'], ['Heures', "entre l'alerte et le mandat de saisie"]],
+        tl: [["Fin de l'été 2022", 'Un escroc rencontre la victime sur une appli immobilière.'], ['Semaines suivantes', 'La victime envoie 200 k$, puis 1,1 M$ de plus. Des proches suivent.'],
+             ['Fin déc. 2022', 'La victime paie une « taxe de retrait » de 200 k$. Les fonds dorment dans un portefeuille non hébergé.'], ['Fin février', 'Une alerte se déclenche quand les fonds partent vers une passerelle de sortie.'], ['En quelques heures', "L'USSS obtient un mandat de saisie."]],
+        helpT: "L'apport de TRM", help: ['TRM Forensics', 'Alertes sur des portefeuilles surveillés, dont un portefeuille non hébergé', 'Traçage au niveau des adresses pour isoler les fonds exacts des victimes'],
+        quote: "(trad.) Grâce aux données de la blockchain, combinées à d'autres preuves, l'équipe a obtenu un mandat de saisie en quelques heures." } },
+    { tab: 'LockBit · Rançongiciel', kick: 'Démo · inculpations LockBit', title: 'Rançongiciel LockBit : plus de 1 400 attaques', sub: "Illustration visuelle d'un article public de TRM",
+      events: [
+        { when: "Jusqu'à juin 2023", tip: 'ATTAQUES', name: 'Plus de 1 400 attaques LockBit, aux États-Unis et dans le monde' },
+        { when: "Jusqu'à juin 2023", tip: 'RANÇONS', name: 'Plus de 100 M$ exigés · des dizaines de millions payés en BTC' },
+        { when: 'Date non publique', tip: 'TRAÇAGE', name: "Une partie d'une rançon tracée" },
+        { when: 'Nov. 2022', tip: 'NOV. 22', name: 'Un acteur de LockBit inculpé dans le New Jersey' },
+        { when: 'Mai 2023', tip: 'MAI 23', name: 'Un autre mis en accusation (LockBit, Babuk, Hive)' },
+        { when: 'Juin 2023', tip: 'JUIN 23', name: 'Un ressortissant russe arrêté et inculpé' },
+      ],
+      pins: { v1: { name: 'Victimes de LockBit', sub: 'États-Unis et monde · 1 400+ attaques' }, hub: { name: 'Paiements de rançon', sub: 'bitcoin · lieu non public' }, end: { name: 'Adresse contrôlée par le suspect', sub: 'lieu non public' } },
+      mid: { name: "Une partie d'une rançon", sub: "tracée par les forces de l'ordre" },
+      rows: [['Attaques', '1 400+ attaques LockBit', 'États-Unis et monde'], ['Rançons', 'Plus de 100 M$ exigés', 'des dizaines de millions payés en bitcoin'],
+             ['Traçage', "Une partie d'un paiement", "tracée par les forces de l'ordre"], ['Suspect', 'Ressortissant russe · inculpé', 'le paiement a atteint son adresse']],
+      big: { k: 'Agences' },
+      info: {
+        v1: ['Victimes', 'Victimes de LockBit', 'Selon la plainte américaine, des acteurs de LockBit ont mené plus de 1 400 attaques contre des victimes aux États-Unis et dans le monde.'],
+        1: ['Source 1 · blog TRM', 'Paiements de rançon', 'Plus de 100 M$ ont été exigés. Les victimes ont payé au moins des dizaines de millions de dollars en bitcoin.'],
+        2: ['Source 2 · blog TRM', 'Rançon tracée', "Dans au moins un cas, les forces de l'ordre ont pu tracer une partie du paiement d'une victime jusqu'à une adresse contrôlée par le suspect."],
+        3: ['Source 3 · blog TRM', 'Inculpations', 'Un ressortissant russe a été arrêté et inculpé en juin 2023 pour avoir déployé LockBit. Deux autres acteurs de LockBit ont été inculpés en nov. 2022 et mai 2023.'],
+      },
+      action: 'Partager le dossier',
+      modal: { k: 'Dossier · brouillon', t: 'Agences partenaires · 15 citées', f: [['Traçage', "Une partie d'une rançon → adresse du suspect"], ['Ampleur', '1 400+ attaques · plus de 100 M$ exigés'], ['Base', 'Traçage blockchain et plainte américaine']] },
+      share: "Agences des États-Unis, du Royaume-Uni, d'Allemagne, de France, de Suisse, de Suède, du Japon et de l'UE",
+      agencies: [
+        { name: 'DOJ · FBI · IRS-CI', sub: 'États-Unis', info: ['Agence', 'Agences américaines', "L'article cite le DOJ, le FBI et l'IRS-CI, ainsi que la police de Jersey City et la police d'État du New Jersey."] },
+        { name: 'National Crime Agency', sub: 'Royaume-Uni', info: ['Agence', 'Agences britanniques', "L'article cite la National Crime Agency et la South West Regional Organised Crime Unit."] },
+        { name: 'Europol EC3 · Eurojust', sub: 'La Haye · UE', info: ['Agence', "Agences de l'UE", "L'article cite le Centre européen de lutte contre la cybercriminalité d'Europol et Eurojust."] },
+        { name: 'BKA · LKA', sub: 'Allemagne', info: ['Agence', 'Agences allemandes', "L'article cite le Bundeskriminalamt et le Landeskriminalamt du Schleswig-Holstein."] },
+        { name: 'Gendarmerie', sub: 'France', info: ['Agence', 'France', "L'article cite le commandement de la Gendarmerie nationale dans le cyberespace."] },
+        { name: 'Kantonspolizei Zürich', sub: 'Suisse', info: ['Agence', 'Suisse', "L'article cite la Kantonspolizei Zürich."] },
+        { name: 'Police suédoise', sub: 'Suède', info: ['Agence', 'Suède', "L'article cite l'Autorité de police suédoise."] },
+        { name: 'Agence nationale de police', sub: 'Japon', info: ['Agence', 'Japon', "L'article cite l'Agence nationale de police du Japon."] },
+      ],
+      done: { toast: "Dossier partagé (démo, rien n'est envoyé)", line: "Résultat réel : 15 agences citées dans 7 pays et l'UE", cap: "L'article cite 15 agences dans 7 pays et l'UE. Un ressortissant russe a été arrêté et inculpé en juin 2023." },
+      steps: [['Étape 1 · Les attaques', 'Des acteurs de LockBit frappent plus de 1 400 victimes aux États-Unis et dans le monde.'],
+              ['Étape 2 · Les rançons', 'Plus de 100 M$ exigés. Les victimes paient des dizaines de millions en bitcoin. Cliquez sur SRC 1.'],
+              ['Étape 3 · Suivre un paiement', "Les forces de l'ordre tracent une partie de la rançon d'une victime. Cliquez sur SRC 2."],
+              ['Étape 4 · Le suspect', 'La piste mène à une adresse contrôlée par le suspect. Les inculpations suivent.'],
+              ['Étape 5 · Partager le dossier', "Des agences de 7 pays et de l'UE ont travaillé sur l'affaire. Cliquez sur « Partager le dossier »."]],
+      swarm: { label: 'attaques LockBit · un point chacune · positions indicatives', final: '1 400+' },
+      real: { chip: 'article TRM', src: 'Blog TRM · juin 2023', title: 'Les autorités américaines arrêtent un ressortissant russe pour des attaques par rançongiciel', who: 'Rançongiciel LockBit · inculpations annoncées par le DOJ américain',
+        stats: [['1 400+', 'attaques LockBit dans le monde'], ['100 M$+', 'de rançons exigées'], ['Dizaines de M$', 'payés en bitcoin']],
+        tl: [['Nov. 2022', 'Un acteur de LockBit est inculpé dans le New Jersey.'], ['Mai 2023', 'Un autre est mis en accusation pour des attaques LockBit, Babuk et Hive.'], ['Juin 2023', 'Un ressortissant russe est arrêté et inculpé pour des attaques LockBit.']],
+        helpT: "Agences citées dans l'article", help: ['DOJ · FBI · IRS-CI (États-Unis)', 'Europol EC3 · Eurojust', 'National Crime Agency (Royaume-Uni)', 'BKA (Allemagne) · Agence nationale de police (Japon)', 'Gendarmerie (France) · polices suisse et suédoise'],
+        quote: "(trad.) Dans au moins un cas, les forces de l'ordre ont pu tracer une partie du paiement de rançon d'une victime…" } },
+    { tab: 'Bybit · Piratage', kick: 'Démo · piratage de Bybit', title: 'Piratage de Bybit : ~1,5 Md$ volés', sub: "Illustration visuelle d'un article public de TRM",
+      events: [
+        { when: 'Févr. 2025', tip: 'PIRATAGE', name: 'Portefeuille froid compromis · ~1,5 Md$ volés' },
+        { when: 'Févr. 2025', tip: 'ÉTIQUETÉ', name: 'TRM étiquette les adresses « Hacked » et « Stolen Funds »' },
+        { when: 'Févr. 2025', tip: 'SUIVI', name: 'Entité de suivi « Bybit Exploiter Feb 2025 » créée' },
+        { when: 'Févr. 2025', tip: 'ATTRIBUÉ', name: 'TRM relie le piratage à la Corée du Nord' },
+        { when: 'Févr. 2025', tip: 'PARTAGE', name: 'Attribution prête à être partagée' },
+      ],
+      pins: { v1: { name: 'Bybit · portefeuille froid', sub: '~1,5 Md$ en jetons Ethereum' }, hub: { name: 'Adresses des pirates', sub: 'étiquetées · lieu non public' }, end: { name: 'Attribué : Corée du Nord', sub: 'confiance élevée' } },
+      mid: { tag: 'Preuve', name: "Recoupements d'adresses", sub: 'avec des vols nord-coréens passés' },
+      rows: [['Victime', 'Bybit · portefeuille froid hors ligne', '~1,5 Md$ en jetons Ethereum'], ['Étiquettes', '« Hacked » · « Stolen Funds »', 'appliquées aux adresses des pirates'],
+             ['Suivi', '« Bybit Exploiter Feb 2025 »', 'entité de suivi en temps réel'], ['Attribution', 'Corée du Nord · confiance élevée', 'recoupements avec des vols passés']],
+      big: { k: 'Volés' },
+      info: {
+        v1: ['Victime', 'Portefeuille froid de Bybit', 'Les attaquants ont compromis un portefeuille froid hors ligne de Bybit. Environ 1,5 Md$ en jetons Ethereum ont été volés, le plus gros piratage jamais enregistré.'],
+        1: ['Source 1 · blog TRM', 'Étiquettes', 'TRM a rapidement étiqueté les adresses des pirates « Hacked » ou « Stolen Funds ».'],
+        2: ['Source 2 · blog TRM', 'Entité de suivi', "TRM a créé l'entité « Bybit Exploiter Feb 2025 » pour suivre les actifs volés en temps réel."],
+        3: ['Source 3 · blog TRM', 'Attribution', "TRM a relevé d'importants recoupements entre les adresses contrôlées par les pirates de Bybit et celles liées à de précédents vols nord-coréens."],
+      },
+      action: "Partager l'attribution",
+      modal: { k: 'Attribution · brouillon', t: "Partenaires des forces de l'ordre", f: [['Conclusion', 'Corée du Nord · confiance élevée'], ['Base', 'Recoupements avec des vols nord-coréens passés'], ['Suivi', '« Bybit Exploiter Feb 2025 » suit les fonds']] },
+      share: 'FBI et agences partenaires',
+      agencies: [{ name: 'FBI', sub: 'États-Unis', info: ['Agence', 'FBI', 'Le FBI a publiquement relié le piratage de Bybit à la Corée du Nord le 26 février 2025.'] }],
+      done: { toast: "Attribution partagée (démo, rien n'est envoyé)", line: 'Résultat réel : le FBI a relié le piratage à la Corée du Nord le 26 févr. 2025', cap: 'TRM a publié le lien avec la Corée du Nord. Le FBI a publiquement relié le piratage à la Corée du Nord le 26 février 2025.' },
+      steps: [['Étape 1 · Le piratage', 'Des attaquants vident un portefeuille froid hors ligne de Bybit. Environ 1,5 Md$ en jetons Ethereum disparaissent.'],
+              ['Étape 2 · Étiqueter les adresses', 'TRM étiquette les adresses des pirates « Hacked » et « Stolen Funds ». Cliquez sur SRC 1.'],
+              ['Étape 3 · Suivre en temps réel', 'Une entité de suivi suit les fonds volés dans leurs mouvements. Cliquez sur SRC 2.'],
+              ['Étape 4 · Attribution', 'Des recoupements avec des vols passés désignent la Corée du Nord, avec une confiance élevée.'],
+              ['Étape 5 · Partager', "Cliquez sur « Partager l'attribution » pour transmettre la conclusion aux forces de l'ordre."]],
+      real: { chip: 'article TRM', src: 'Blog TRM · févr. 2025', title: 'TRM relie la Corée du Nord au piratage record de 1,5 milliard de dollars', who: 'Exchange Bybit · portefeuille froid hors ligne compromis',
+        stats: [['~1,5 Md$', 'en jetons Ethereum volés'], ['N° 1', 'plus gros piratage jamais enregistré'], ['~800 M$', 'total nord-coréen de 2024, presque doublé en un jour']],
+        tl: [['Févr. 2025', 'Des attaquants compromettent un portefeuille froid hors ligne de Bybit.'], ['Juste après', 'TRM étiquette les adresses « Hacked » et « Stolen Funds ».'],
+             ['Juste après', 'Une entité de suivi suit les fonds volés en temps réel.'], ['20 févr. 2025', 'TRM relie le piratage à la Corée du Nord avec une confiance élevée.']],
+        helpT: 'Comment TRM a suivi les fonds', help: ['Étiquettes : « Hacked » et « Stolen Funds »', 'Entité de suivi : « Bybit Exploiter Feb 2025 »', "Attribution par recoupement d'adresses avec des vols nord-coréens passés"],
+        quote: "(trad.) d'importants recoupements observés entre les adresses contrôlées par les pirates de Bybit…" } },
+  ],
+  ko: [
+    { tab: 'USSS · 피그 버처링', chains: '미공개', kick: '데모 · USSS 샌프란시스코 사례', title: '피그 버처링: 550만 달러 피해', sub: 'TRM 공개 사례 연구의 시각적 일러스트',
+      events: [
+        { when: '2022년 8월', tip: '22년 8월', name: '사기범이 부동산 앱에서 피해자에게 접근' },
+        { when: '2022년 하반기', tip: '2022', name: '피해자가 가짜 거래 플랫폼에 20만 달러 송금' },
+        { when: '2022년 하반기', tip: '2022', name: '110만 달러 추가 송금 · 가족도 투자' },
+        { when: '2022년 12월 말', tip: '22년 12월', name: '피해자가 20만 달러의 "출금 세금" 납부' },
+        { when: '2022년 12월 말', tip: '22년 12월', name: '자금이 비수탁형 지갑에서 휴면 상태로 전환' },
+        { when: '2월 말', tip: '2월', name: '알림: 자금이 오프램프로 이동' },
+        { when: '2월 말', tip: '당일', name: 'USSS에 공유할 알림 준비 완료' },
+      ],
+      pins: { v1: { name: '피해자 · 7명', sub: '미국 · 550만 달러 송금' }, hub: { name: '가짜 거래 플랫폼', sub: '지갑 · 위치 비공개' }, end: { name: '오프램프', sub: '알림 발생 · 위치 비공개' } },
+      mid: { name: '비수탁형 지갑', sub: '2022년 12월 말부터 휴면' },
+      rows: [['피해자', '피해자 7명 · 550만 달러', '로맨스 스캠 → 가짜 투자'], ['플랫폼', '가짜 거래 플랫폼', '부동산 앱에서 첫 접촉'], ['보관', '비수탁형 지갑', '2022년 12월 말부터 휴면'], ['오프램프', '자금 이동 · 알림 발생', '주소 단위 추적']],
+      big: { k: '회수액' },
+      info: {
+        v1: ['피해자', '피해자 7명 · 550만 달러', '피해자와 가족 여러 명이 550만 달러를 잃었습니다. 로맨스 스캠이 투자 사기로 이어졌습니다.'],
+        1: ['출처 1 · TRM 사례 연구', '가짜 거래 플랫폼', '사기범은 부동산 앱에서 피해자를 만났습니다. 피해자는 20만 달러, 이어 110만 달러를 보냈습니다. 가족들도 투자했습니다.'],
+        2: ['출처 2 · TRM 사례 연구', '비수탁형 지갑', '2022년 12월 말 피해자는 20만 달러의 "출금 세금"을 냈습니다. 이후 자금은 비수탁형 지갑에서 움직이지 않았습니다.'],
+        3: ['출처 3 · TRM 사례 연구', '이동 알림', '수사관들은 지갑을 모니터링했습니다. 2월 말 자금이 오프램프로 이동하자 알림이 울렸습니다.'],
+      },
+      action: 'USSS에 공유',
+      modal: { k: '알림 · 자금 이동', t: 'USSS 샌프란시스코 · 수사팀', f: [['지갑', '모니터링 중인 비수탁형 지갑'], ['자금', '피해액 550만 달러 중 약 500만 달러'], ['근거', '피해자 자금을 정확히 가려낸 주소 단위 추적'], ['다음 단계', 'USSS가 압수 영장 준비']] },
+      share: '미국 비밀경호국(USSS) · 샌프란시스코 지부',
+      agencies: [{ name: '미국 비밀경호국', sub: '샌프란시스코 지부', info: ['기관', 'USSS 샌프란시스코', 'USSS는 알림 후 몇 시간 만에 압수 영장을 확보했습니다. 약 500만 달러가 회수되었습니다.'] }],
+      done: { toast: 'USSS에 공유됨 (데모, 실제 전송 없음)', line: '실제 결과: 몇 시간 만에 압수 영장 · 500만 달러 회수', cap: 'USSS는 몇 시간 만에 압수 영장을 확보했습니다. 550만 달러 중 약 500만 달러가 회수되었습니다.' },
+      steps: [['1단계 · 사기', '사기범이 부동산 앱에서 피해자에게 접근합니다. 피해자 7명이 총 550만 달러를 보냅니다.'],
+              ['2단계 · 가짜 플랫폼으로', '돈이 가짜 거래 플랫폼으로 들어갑니다. SRC 1을 눌러 시작 과정을 보세요.'],
+              ['3단계 · 자금 잠복', '20만 달러의 "출금 세금" 이후 자금이 비수탁형 지갑에 머뭅니다.'],
+              ['4단계 · 알림', '2월 말 자금이 오프램프로 이동합니다. TRM 알림이 울립니다.'],
+              ['5단계 · 신속 대응', 'USSS에 알림을 보내세요. "USSS에 공유"를 눌러 검토하세요.']],
+      swarm: { label: '피해자 · 점 하나가 한 명 · 위치는 예시' },
+      real: { chip: 'USSS 사례 연구', src: 'TRM 사례 연구 · 2022년 8월', title: 'USSS 피그 버처링 수사, 500만 달러 이상 압수로 이어져', who: '미국 비밀경호국 · 샌프란시스코 지부',
+        stats: [['550만 달러', '피해자 7명의 손실'], ['500만 달러', '회수'], ['몇 시간', '알림에서 압수 영장까지']],
+        tl: [['2022년 늦여름', '사기범이 부동산 앱에서 피해자를 만납니다.'], ['이후 몇 주', '피해자가 20만 달러, 이어 110만 달러를 보냅니다. 가족도 합류합니다.'],
+             ['2022년 12월 말', '피해자가 20만 달러의 "출금 세금"을 냅니다. 자금이 비수탁형 지갑에서 멈춥니다.'], ['2월 말', '자금이 오프램프로 이동하자 알림이 울립니다.'], ['몇 시간 내', 'USSS가 압수 영장을 확보합니다.']],
+        helpT: 'TRM의 역할', help: ['TRM Forensics', '비수탁형 지갑을 포함한 모니터링 지갑 알림', '피해자 자금을 정확히 가려내는 주소 단위 추적'],
+        quote: '(번역) 블록체인 데이터와 다른 증거를 결합해 수사팀은 몇 시간 만에 압수 영장을 확보했습니다.' } },
+    { tab: 'LockBit · 랜섬웨어', kick: '데모 · LockBit 기소', title: 'LockBit 랜섬웨어: 공격 1,400건 이상', sub: 'TRM 공개 블로그 글의 시각적 일러스트',
+      events: [
+        { when: '2023년 6월까지', tip: '공격', name: '미국과 전 세계에서 LockBit 공격 1,400건 이상' },
+        { when: '2023년 6월까지', tip: '몸값', name: '1억 달러 이상 요구 · 수천만 달러가 BTC로 지급' },
+        { when: '날짜 비공개', tip: '추적', name: '한 피해자의 몸값 일부 추적' },
+        { when: '2022년 11월', tip: '22년 11월', name: 'LockBit 공격자 1명 뉴저지에서 기소' },
+        { when: '2023년 5월', tip: '23년 5월', name: '또 다른 공격자 기소 (LockBit, Babuk, Hive)' },
+        { when: '2023년 6월', tip: '23년 6월', name: '러시아 국적자 체포 및 기소' },
+      ],
+      pins: { v1: { name: 'LockBit 피해자', sub: '미국 및 전 세계 · 공격 1,400건 이상' }, hub: { name: '몸값 지급', sub: '비트코인 · 위치 비공개' }, end: { name: '용의자 통제 주소', sub: '위치 비공개' } },
+      mid: { name: '몸값 일부', sub: '법 집행기관이 추적' },
+      rows: [['공격', 'LockBit 공격 1,400건 이상', '미국 및 전 세계'], ['몸값', '1억 달러 이상 요구', '수천만 달러가 비트코인으로 지급'], ['추적', '몸값 지급액 일부', '법 집행기관이 추적'], ['용의자', '러시아 국적자 · 기소', '지급액이 그의 주소에 도달']],
+      big: { k: '기관' },
+      info: {
+        v1: ['피해자', 'LockBit 피해자', '미국 고소장에 따르면 LockBit 공격자들은 미국과 전 세계 피해자를 상대로 1,400건 이상의 공격을 벌였습니다.'],
+        1: ['출처 1 · TRM 블로그', '몸값 지급', '1억 달러 이상이 요구되었습니다. 피해자들은 최소 수천만 달러를 비트코인으로 지급했습니다.'],
+        2: ['출처 2 · TRM 블로그', '몸값 추적', '적어도 한 건에서 법 집행기관은 피해자가 지급한 몸값의 일부를 용의자가 통제한 주소까지 추적했습니다.'],
+        3: ['출처 3 · TRM 블로그', '기소', '2023년 6월 러시아 국적자가 LockBit 유포 혐의로 체포·기소되었습니다. 다른 LockBit 공격자 2명은 2022년 11월과 2023년 5월에 기소되었습니다.'],
+      },
+      action: '사건 파일 공유',
+      modal: { k: '사건 파일 · 초안', t: '협력 기관 · 15곳 명시', f: [['추적', '몸값 일부 → 용의자 통제 주소'], ['규모', '공격 1,400건 이상 · 1억 달러 이상 요구'], ['근거', '블록체인 추적과 미국 고소장']] },
+      share: '미국, 영국, 독일, 프랑스, 스위스, 스웨덴, 일본 및 EU 기관',
+      agencies: [
+        { name: 'DOJ · FBI · IRS-CI', sub: '미국', info: ['기관', '미국 기관', '글에는 DOJ, FBI, IRS-CI와 저지시티 경찰, 뉴저지주 경찰이 명시되어 있습니다.'] },
+        { name: '국가범죄청(NCA)', sub: '영국', info: ['기관', '영국 기관', '글에는 국가범죄청과 남서부 지역 조직범죄대가 명시되어 있습니다.'] },
+        { name: '유로폴 EC3 · 유로저스트', sub: '헤이그 · EU', info: ['기관', 'EU 기관', '글에는 유로폴 유럽 사이버범죄센터와 유로저스트가 명시되어 있습니다.'] },
+        { name: 'BKA · LKA', sub: '독일', info: ['기관', '독일 기관', '글에는 독일 연방범죄수사청과 슐레스비히홀슈타인주 범죄수사청이 명시되어 있습니다.'] },
+        { name: '국가헌병대', sub: '프랑스', info: ['기관', '프랑스', '글에는 프랑스 국가헌병대 사이버공간사령부가 명시되어 있습니다.'] },
+        { name: '취리히 주 경찰', sub: '스위스', info: ['기관', '스위스', '글에는 취리히 주 경찰이 명시되어 있습니다.'] },
+        { name: '스웨덴 경찰', sub: '스웨덴', info: ['기관', '스웨덴', '글에는 스웨덴 경찰청이 명시되어 있습니다.'] },
+        { name: '경찰청', sub: '일본', info: ['기관', '일본', '글에는 일본 경찰청이 명시되어 있습니다.'] },
+      ],
+      done: { toast: '사건 파일 공유됨 (데모, 실제 전송 없음)', line: '실제 결과: 7개국과 EU의 기관 15곳 명시', cap: '글에는 7개국과 EU의 기관 15곳이 명시되어 있습니다. 2023년 6월 러시아 국적자가 체포·기소되었습니다.' },
+      steps: [['1단계 · 공격', 'LockBit 공격자들이 미국과 전 세계에서 1,400명 이상의 피해자를 공격합니다.'],
+              ['2단계 · 몸값 지급', '1억 달러 이상이 요구됩니다. 피해자들은 수천만 달러를 비트코인으로 지급합니다. SRC 1을 누르세요.'],
+              ['3단계 · 지급 추적', '법 집행기관이 한 피해자의 몸값 일부를 추적합니다. SRC 2를 누르세요.'],
+              ['4단계 · 용의자', '추적 끝에 용의자가 통제한 주소가 드러납니다. 기소가 이어집니다.'],
+              ['5단계 · 사건 공유', '7개국과 EU의 기관이 이 사건에 참여했습니다. "사건 파일 공유"를 누르세요.']],
+      swarm: { label: 'LockBit 공격 · 점 하나가 공격 한 건 · 위치는 예시' },
+      real: { chip: 'TRM 글', src: 'TRM 블로그 · 2023년 6월', title: '미국 당국, 랜섬웨어 공격 혐의로 러시아 국적자 체포', who: 'LockBit 랜섬웨어 · 미국 법무부가 기소 발표',
+        stats: [['1,400+', '전 세계 LockBit 공격'], ['1억 달러+', '요구된 몸값'], ['수천만 달러', '비트코인으로 지급']],
+        tl: [['2022년 11월', 'LockBit 공격자 1명이 뉴저지에서 기소됩니다.'], ['2023년 5월', '또 다른 공격자가 LockBit, Babuk, Hive 공격으로 기소됩니다.'], ['2023년 6월', '러시아 국적자가 LockBit 공격 혐의로 체포·기소됩니다.']],
+        helpT: '글에 명시된 기관', help: ['미국 DOJ · FBI · IRS-CI', '유로폴 EC3 · 유로저스트', '영국 국가범죄청', '독일 BKA · 일본 경찰청', '프랑스 국가헌병대 · 스위스·스웨덴 경찰'],
+        quote: '(번역) 적어도 한 건에서 법 집행기관은 피해자가 지급한 몸값의 일부를 추적할 수 있었습니다…' } },
+    { tab: 'Bybit · 거래소 해킹', kick: '데모 · Bybit 해킹', title: 'Bybit 해킹: 약 15억 달러 도난', sub: 'TRM 공개 블로그 글의 시각적 일러스트',
+      events: [
+        { when: '2025년 2월', tip: '해킹', name: '오프라인 콜드월렛 탈취 · 약 15억 달러 도난' },
+        { when: '2025년 2월', tip: '태그', name: 'TRM이 주소에 "Hacked", "Stolen Funds" 태그 지정' },
+        { when: '2025년 2월', tip: '추적', name: '추적 엔티티 "Bybit Exploiter Feb 2025" 생성' },
+        { when: '2025년 2월', tip: '귀속', name: 'TRM, 해킹을 북한과 연결' },
+        { when: '2025년 2월', tip: '공유', name: '공유할 귀속 분석 준비 완료' },
+      ],
+      pins: { v1: { name: 'Bybit · 콜드월렛', sub: '이더리움 토큰 약 15억 달러' }, hub: { name: '해커 주소', sub: '태그 지정 · 위치 비공개' }, end: { name: '귀속: 북한', sub: '높은 신뢰도' } },
+      mid: { tag: '근거', name: '주소 중복', sub: '과거 북한 탈취 사건과' },
+      rows: [['피해자', 'Bybit · 오프라인 콜드월렛', '이더리움 토큰 약 15억 달러'], ['태그', '"Hacked" · "Stolen Funds"', '해커 주소에 적용'], ['추적', '"Bybit Exploiter Feb 2025"', '실시간 추적 엔티티'], ['귀속', '북한 · 높은 신뢰도', '과거 탈취 사건과 주소 중복']],
+      big: { k: '도난액' },
+      info: {
+        v1: ['피해자', 'Bybit 콜드월렛', '공격자들이 Bybit의 오프라인 콜드월렛 하나를 탈취했습니다. 이더리움 토큰 약 15억 달러가 도난당했으며, 역대 최대 규모입니다.'],
+        1: ['출처 1 · TRM 블로그', '태그', 'TRM은 해커 주소에 신속히 "Hacked" 또는 "Stolen Funds" 태그를 지정했습니다.'],
+        2: ['출처 2 · TRM 블로그', '추적 엔티티', 'TRM은 도난 자산을 실시간으로 모니터링하기 위해 "Bybit Exploiter Feb 2025" 엔티티를 만들었습니다.'],
+        3: ['출처 3 · TRM 블로그', '귀속', 'TRM은 Bybit 해커가 통제한 주소와 과거 북한 탈취 사건 주소 사이에서 상당한 중복을 확인했습니다.'],
+      },
+      action: '귀속 분석 공유',
+      modal: { k: '귀속 분석 · 초안', t: '법 집행 협력 기관', f: [['결론', '북한 · 높은 신뢰도'], ['근거', '과거 북한 탈취 사건과 주소 중복'], ['모니터링', '"Bybit Exploiter Feb 2025"가 자금 추적']] },
+      share: 'FBI 및 협력 기관',
+      agencies: [{ name: 'FBI', sub: '미국', info: ['기관', 'FBI', 'FBI는 2025년 2월 26일 Bybit 해킹을 북한 소행으로 공식 발표했습니다.'] }],
+      done: { toast: '귀속 분석 공유됨 (데모, 실제 전송 없음)', line: '실제 결과: FBI가 2025년 2월 26일 해킹을 북한과 연결', cap: 'TRM이 북한 연계를 발표했습니다. FBI는 2025년 2월 26일 이 해킹을 북한 소행으로 공식 발표했습니다.' },
+      steps: [['1단계 · 해킹', '공격자들이 Bybit의 오프라인 콜드월렛을 털어갑니다. 이더리움 토큰 약 15억 달러가 사라집니다.'],
+              ['2단계 · 주소 태그', 'TRM이 해커 주소에 "Hacked", "Stolen Funds" 태그를 붙입니다. SRC 1을 누르세요.'],
+              ['3단계 · 실시간 추적', '추적 엔티티가 도난 자금의 이동을 따라갑니다. SRC 2를 누르세요.'],
+              ['4단계 · 귀속', '과거 탈취 사건과의 주소 중복이 높은 신뢰도로 북한을 가리킵니다.'],
+              ['5단계 · 공유', '"귀속 분석 공유"를 눌러 결과를 법 집행기관에 보내세요.']],
+      real: { chip: 'TRM 글', src: 'TRM 블로그 · 2025년 2월', title: 'TRM, 사상 최대 15억 달러 해킹을 북한과 연결', who: 'Bybit 거래소 · 오프라인 콜드월렛 탈취',
+        stats: [['약 15억 달러', '이더리움 토큰 도난'], ['역대 1위', '사상 최대 해킹'], ['약 8억 달러', '북한의 2024년 총액, 하루 만에 거의 두 배']],
+        tl: [['2025년 2월', '공격자들이 Bybit의 오프라인 콜드월렛 하나를 탈취합니다.'], ['직후', 'TRM이 주소에 "Hacked", "Stolen Funds" 태그를 붙입니다.'],
+             ['직후', '추적 엔티티가 도난 자금을 실시간으로 따라갑니다.'], ['2025년 2월 20일', 'TRM이 높은 신뢰도로 해킹을 북한과 연결합니다.']],
+        helpT: 'TRM의 추적 방법', help: ['태그: "Hacked", "Stolen Funds"', '추적 엔티티: "Bybit Exploiter Feb 2025"', '과거 북한 탈취 사건과의 주소 중복으로 귀속'],
+        quote: '(번역) Bybit 해커가 통제한 주소들 사이에서 관찰된 상당한 중복…' } },
+  ],
+};
+const LOCALE = { en: 'en-US', fr: 'fr-FR', ko: 'ko-KR' };
+let LANG = 'en';
+try { const l = localStorage.getItem('trm-demo-lang'); if (UI[l]) LANG = l; } catch (e) {}
+const u = k => UI[LANG][k];
+// override a case with its translation, field by field; anything missing keeps the English value
+function localize(base, ov) {
+  if (ov === undefined || ov === null) return base;
+  if (Array.isArray(base)) return base.map((b, i) => localize(b, ov[i]));
+  if (base && typeof base === 'object') { const o = {}; for (const k in base) o[k] = localize(base[k], ov[k]); return o; }
+  return ov;
+}
+const STOPS = [4.0, 10.7, 13.7, 17.6, 17.6];
+const ROW_AT = [9.4, 10.2, 12.6, 14.4];
+
+const arcs = [], pins = {};
+let C = null, caseGroup = null;
+function arcCurve(A, B) {
+  const ang = A.angleTo(B);
+  const mid = A.clone().add(B).normalize().multiplyScalar(R + .12 + ang * .34);
+  return new THREE.QuadraticBezierCurve3(A.clone().multiplyScalar(1.004), mid, B.clone().multiplyScalar(1.004));
+}
+function addArc(from, to, t0, t1, color, h) {
+  const curve = arcCurve(v3(from.lat, from.lon), v3(to.lat, to.lon)), N = 160;
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(N)), new THREE.LineBasicMaterial({ color, transparent: true }));
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 160, .0062, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8 }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.013, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  caseGroup.add(line, tube, head);
+  arcs.push({ curve, line, tube, head, t0, t1, N, idx: tube.geometry.index.count, h });
+}
+// --- background traffic: ordinary transfers between exchange hubs, always running under the case trace
+const HUBS = [[40.7, -74], [37.8, -122.4], [43.7, -79.4], [51.5, -0.1], [50.1, 8.7], [47.4, 8.5], [41, 29], [25.2, 55.3], [19.1, 72.9],
+  [1.35, 103.8], [22.3, 114.2], [35.7, 139.7], [37.6, 127], [-33.9, 151.2], [-23.5, -46.6], [-34.6, -58.4], [6.5, 3.4], [-26.2, 28], [-6.2, 106.8], [19.4, -99.1]];
+const AMB_N = 72, AMB_TAIL = 22, amb = [];
+for (const [la, lo] of HUBS) {
+  const d = new THREE.Mesh(new THREE.CircleGeometry(.008, 12), new THREE.MeshBasicMaterial({ color: 0x9fd0e6, transparent: true, opacity: .7 }));
+  const at = v3(la, lo, 1.003); d.position.copy(at); d.lookAt(at.clone().multiplyScalar(2)); globe.add(d);
+}
+function ambSpawn(a, now) {
+  const i = Math.floor(Math.random() * HUBS.length); let j = i; while (j === i) j = Math.floor(Math.random() * HUBS.length);
+  const A = v3(...HUBS[i]), B = v3(...HUBS[j]);
+  const mid = A.clone().add(B).normalize().multiplyScalar(R + .03 + A.angleTo(B) * .16);
+  a.line.geometry.setFromPoints(new THREE.QuadraticBezierCurve3(A.clone().multiplyScalar(1.003), mid, B.clone().multiplyScalar(1.003)).getPoints(64));
+  a.s = now + Math.random() * 2; a.dur = 1.6 + Math.random() * 2.2;
+}
+for (let k = 0; k < AMB_N; k++) {
+  const a = { line: new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9fd0e6, transparent: true, opacity: 0 })) };
+  globe.add(a.line); ambSpawn(a, Math.random() * -3); amb.push(a);
+}
+function ambient(now, dim) {
+  for (const a of amb) {
+    const p = (now - a.s) / a.dur;
+    if (p > 1) { ambSpawn(a, now); continue; }
+    if (p < 0) { a.line.material.opacity = 0; continue; }
+    const head = Math.floor(p * (65 + AMB_TAIL)), from = Math.max(0, head - AMB_TAIL);
+    a.line.geometry.setDrawRange(from, Math.max(0, Math.min(head, 65) - from));
+    a.line.material.opacity = .75 * Math.sin(Math.PI * p) * dim;
+  }
+}
+// --- swarm: one dot per victim or attack, so a big number looks big. Dots land on land (water texture as a mask).
+let LANDM = null, swarm = null;
+function buildMask() {
+  return new Promise(res => { const im = new Image(); im.onerror = res; im.onload = () => {
+    const c = document.createElement('canvas'); c.width = 720; c.height = 360; const g = c.getContext('2d');
+    g.drawImage(im, 0, 0, 720, 360); LANDM = g.getImageData(0, 0, 720, 360).data; res(); }; im.src = TEX.water; });
+}
+const isLand = (lat, lon) => !LANDM || LANDM[(Math.floor((90 - lat) / 180 * 359) * 720 + Math.floor((lon + 180) / 360 * 719)) * 4] < 128;
+function addSwarm(S) {
+  const pts = [], [la0, la1, lo0, lo1] = S.box; let guard = 0;
+  while (pts.length < S.n && guard++ < S.n * 400) { const la = la0 + Math.random() * (la1 - la0), lo = lo0 + Math.random() * (lo1 - lo0); if (isLand(la, lo)) pts.push([la, lo]); }
+  const dots = new THREE.Points(new THREE.BufferGeometry().setFromPoints(pts.map(([la, lo]) => v3(la, lo, 1.004))),
+    new THREE.PointsMaterial({ color: 0xff6b5e, size: S.size, transparent: true, depthWrite: false }));
+  caseGroup.add(dots);
+  const B = v3(C.pins.hub.lat, C.pins.hub.lon), na = Math.min(S.arcs, pts.length), lines = [];
+  for (let k = 0; k < na; k++) {
+    const A = v3(...pts[Math.floor(k * pts.length / na)]);
+    const mid = A.clone().add(B).normalize().multiplyScalar(R + .04 + A.angleTo(B) * .22);
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(new THREE.QuadraticBezierCurve3(A.clone().multiplyScalar(1.004), mid, B.clone().multiplyScalar(1.004)).getPoints(48)),
+      new THREE.LineBasicMaterial({ color: RED, transparent: true, opacity: 0 }));
+    line.userData.t0 = S.arcT[0] + Math.random() * (S.arcT[1] - S.arcT[0] - 1.2); caseGroup.add(line); lines.push(line);
+  }
+  swarm = { S, dots, n: pts.length, lines };
+  $('swl').textContent = S.label;
+}
+function drawSwarm() {
+  if (!swarm) { $('swarm').style.opacity = 0; return; }
+  const S = swarm.S, k = seg(t, S.t[0], S.t[1]), late = seg(t, 9.5, 11);
+  swarm.dots.geometry.setDrawRange(0, Math.ceil(k * swarm.n)); swarm.dots.material.opacity = .95 - .55 * late;
+  for (const l of swarm.lines) { l.geometry.setDrawRange(0, Math.floor(seg(t, l.userData.t0, l.userData.t0 + 1.2) * 49)); l.material.opacity = .5 * (1 - .75 * late); }
+  $('swn').textContent = k >= 1 ? S.final : Math.round(k * S.n).toLocaleString(LOCALE[LANG]);
+  $('swarm').style.opacity = seg(t, S.t[0], S.t[0] + .4) * (1 - seg(t, 8.8, 9.4));
+}
+// --- graph view: the same case as a left-to-right trace (nodes and arrows), driven by the same story time
+const SVGNS = 'http://www.w3.org/2000/svg', COL = { red: '#e5564b', yel: '#ffce54', grn: '#8fd3b0' };
+let G = null, mode = 'globe';
+function sv(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+function gNode(svg, x, y, o) {
+  const g = sv('g', { class: 'gn', transform: `translate(${x},${y})` }, svg);
+  if (o.dot !== false) {
+    if (o.pulse) sv('circle', { r: 24, fill: 'none', stroke: o.c, 'stroke-width': 2, class: 'ring' }, g);
+    sv('circle', { r: o.r || 22, fill: '#14191c', stroke: o.c, 'stroke-width': 3 }, g);
+    sv('circle', { r: 6, fill: o.c }, g);
+  }
+  const side = o.side === 'right', tx = side ? 34 : 0, anchor = side ? 'start' : 'middle';
+  if (o.tag) sv('text', { class: 'gtag', x: tx, y: side ? -10 : -(o.r || 22) - 14, 'text-anchor': anchor }, g).textContent = o.tag;
+  sv('text', { class: 'gname', x: tx, y: side ? 8 : (o.r || 22) + 26, 'text-anchor': anchor }, g).textContent = o.name;
+  // small text breaks at " · " so neighbouring nodes don't collide
+  const sub = sv('text', { class: 'gsub', x: tx, y: side ? 26 : (o.r || 22) + 46, 'text-anchor': anchor }, g);
+  (side ? [o.sub] : o.sub.split(' · ')).forEach((line, i) => { const ts = sv('tspan', { x: tx, dy: i ? 16 : 0 }, sub); ts.textContent = line; });
+  g.onclick = o.click; return g;
+}
+function gEdge(svg, a, b, c, w) {
+  const dx = (b[0] - a[0]) / 2, d = `M${a[0]},${a[1]} C${a[0] + dx},${a[1]} ${b[0] - dx},${b[1]} ${b[0]},${b[1]}`;
+  const path = sv('path', { d, fill: 'none', stroke: c, 'stroke-width': w || 3, pathLength: 1, 'stroke-dasharray': '1 1', 'stroke-dashoffset': 1 }, svg);
+  const head = sv('circle', { r: 5, fill: '#fff', opacity: 0 }, svg);
+  return { path, head, len: path.getTotalLength() };
+}
+function buildGraph() {
+  const svg = $('gsvg'); svg.innerHTML = '';
+  const P = C.pins, X = [100, 350, 590, 810, 970], Y = 250, edges = [], nodes = [];
+  const tagOf = row => C.rows[row] ? C.rows[row][0] : '';
+  const click = (k, row) => () => { show(k); hl(row); };
+  // victims: one dot per victim/attack when the case has a swarm, else a single node
+  let vic, dots = null;
+  if (C.swarm) {
+    const n = C.swarm.n, cols = Math.ceil(Math.sqrt(n * .9)), rows = Math.ceil(n / cols), sp = Math.min(26, 180 / cols), r = sp * .32;
+    const gx = X[0] - (cols - 1) * sp / 2, gy = Y - (rows - 1) * sp / 2, grp = sv('g', { class: 'gn' }, svg);
+    dots = [];
+    for (let k = 0; k < n; k++) dots.push(sv('circle', { cx: gx + (k % cols) * sp, cy: gy + Math.floor(k / cols) * sp, r, fill: '#ff6b5e', opacity: 0 }, grp));
+    grp.onclick = click('v1', 0);
+    vic = gNode(svg, X[0], Y + (rows - 1) * sp / 2 - 4, { dot: false, c: COL.red, name: P.v1.name, sub: P.v1.sub, click: click('v1', 0) });
+    sv('text', { class: 'gtag', x: X[0], y: gy - 18, 'text-anchor': 'middle' }, svg).textContent = tagOf(0);
+    const na = Math.min(16, n);
+    for (let k = 0; k < na; k++) { const d = dots[Math.floor(k * n / na)]; const e = gEdge(svg, [+d.getAttribute('cx'), +d.getAttribute('cy')], [X[1] - 24, Y], COL.red, 1.2); e.t0 = C.swarm.arcT[0] + (C.swarm.arcT[1] - C.swarm.arcT[0] - 1.2) * k / na; e.t1 = e.t0 + 1.2; e.path.setAttribute('opacity', .5); edges.push(e); }
+  } else {
+    vic = gNode(svg, X[0], Y, { c: COL.red, tag: tagOf(0), name: P.v1.name, sub: P.v1.sub, click: click('v1', 0) });
+    const e = gEdge(svg, [X[0] + 24, Y], [X[1] - 24, Y], COL.red); e.t0 = 3.2; e.t1 = 8.4; edges.push(e);
+  }
+  nodes.push({ el: vic, t: P.v1.t[0] });
+  const hub = gNode(svg, X[1], Y, { c: COL.red, tag: tagOf(P.hub.row), name: P.hub.name, sub: P.hub.sub, click: click(P.hub.src || 'hub', P.hub.row) });
+  const mid = gNode(svg, X[2], Y, { c: COL.yel, tag: C.mid.tag || tagOf(C.mid.row), name: C.mid.name, sub: C.mid.sub, click: click(C.mid.src, C.mid.row) });
+  const end = gNode(svg, X[3], Y, { c: COL.yel, pulse: true, tag: tagOf(P.end.row), name: P.end.name, sub: P.end.sub, click: click(P.end.src || 'end', P.end.row) });
+  nodes.push({ el: hub, t: P.hub.t[0] }, { el: mid, t: C.mid.t[0] }, { el: end, t: P.end.t[0] });
+  const e1 = gEdge(svg, [X[1] + 24, Y], [X[2] - 24, Y], COL.yel); e1.t0 = 10.8; e1.t1 = 12.1;
+  const e2 = gEdge(svg, [X[2] + 24, Y], [X[3] - 24, Y], COL.yel); e2.t0 = 12.1; e2.t1 = 13.4;
+  edges.push(e1, e2);
+  // agencies fan out after the investigator approves (same timing as the globe arcs)
+  const n = C.agencies.length, step = n > 1 ? Math.min(90, 400 / (n - 1)) : 0, hEdges = [], hNodes = [];
+  C.agencies.forEach((a, j) => {
+    const y = Y + (j - (n - 1) / 2) * step, t0 = .5 + j * Math.min(.5, 2 / n);
+    const e = gEdge(svg, [X[3] + 24, Y], [X[4] - 14, y], COL.grn, 2); e.t0 = t0; e.t1 = t0 + 1.6; hEdges.push(e);
+    hNodes.push({ el: gNode(svg, X[4], y, { r: 12, c: COL.grn, side: 'right', name: a.name, sub: a.sub, click: () => show('ag' + j) }), t: t0 + 1.6 });
+  });
+  G = { dots, edges, nodes, hEdges, hNodes, end };
+}
+function drawEdge(e, k) {
+  e.path.setAttribute('stroke-dashoffset', 1 - k);
+  if (k > 0 && k < 1) { const p = e.path.getPointAtLength(k * e.len); e.head.setAttribute('cx', p.x); e.head.setAttribute('cy', p.y); e.head.setAttribute('opacity', 1); }
+  else e.head.setAttribute('opacity', 0);
+}
+function drawGraph(shown) {
+  if (!G || mode !== 'graph') return;
+  if (G.dots) { const k = Math.ceil(seg(t, C.swarm.t[0], C.swarm.t[1]) * G.dots.length); G.dots.forEach((d, i) => d.setAttribute('opacity', i < k ? .95 : 0)); }
+  for (const e of G.edges) drawEdge(e, inOut(seg(t, e.t0, e.t1)));
+  for (const nd of G.nodes) nd.el.setAttribute('opacity', seg(t, nd.t, nd.t + .4));
+  G.end.querySelector('.ring').style.display = approved ? 'none' : '';
+  G.hEdges.forEach(e => drawEdge(e, shown ? inOut(seg(hT, e.t0, e.t1)) : 0));
+  G.hNodes.forEach(nd => nd.el.setAttribute('opacity', shown ? seg(hT, nd.t, nd.t + .4) : 0));
+}
+function setMode(m) {
+  mode = m; const g = m === 'graph';
+  $('graph').style.display = g ? 'block' : 'none'; $('labels').style.display = g ? 'none' : '';
+  $('gl').style.opacity = g ? .1 : 1; $('hint').style.visibility = g ? 'hidden' : '';
+  document.querySelectorAll('#viewSw button').forEach(b => b.classList.toggle('on', b.dataset.v === m));
+  try { localStorage.setItem('trm-demo-view', m); } catch (e) {}
+}
+document.querySelectorAll('#viewSw button').forEach(b => b.onclick = () => setMode(b.dataset.v));
+function addLabel(html, cls, onclick) {
+  const el = document.createElement('div'); el.className = 'lab ' + cls; el.innerHTML = html; el.onclick = onclick;
+  $('labels').appendChild(el); return el;
+}
+function addPin(key, p) {
+  const color = p.grn ? GRN : p.yel ? YEL : RED, at = v3(p.lat, p.lon, 1.006), grp = new THREE.Group();
+  grp.position.copy(at); grp.lookAt(at.clone().multiplyScalar(2));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.03, .036, 48), new THREE.MeshBasicMaterial({ color, transparent: true }));
+  const ring2 = new THREE.Mesh(new THREE.RingGeometry(.05, .055, 48), new THREE.MeshBasicMaterial({ color, transparent: true }));
+  grp.add(new THREE.Mesh(new THREE.CircleGeometry(.014, 24), new THREE.MeshBasicMaterial({ color })), ring, ring2); caseGroup.add(grp);
+  const el = addLabel(p.name + '<span class="sub">' + p.sub + '</span>', p.grn ? 'grn' : p.yel ? 'yel' : 'red', () => { show(p.src || key); hl(p.row); });
+  pins[key] = { grp, ring, ring2, el, at, t: p.t, role: p.role, h: p.grn, end: key === 'end', dx: p.dx || 0, dy: p.dy || 0 };
+}
+let ci = 0;
+function loadCase(i) {
+  ci = i; C = localize(CASES[i], TR[LANG] && TR[LANG][i]);
+  if (caseGroup) { globe.remove(caseGroup); caseGroup.traverse(o => { o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }); }
+  caseGroup = new THREE.Group(); globe.add(caseGroup);
+  arcs.length = 0; for (const k in pins) delete pins[k]; $('labels').innerHTML = '';
+  for (const k in C.pins) addPin(k, C.pins[k]);
+  swarm = null; if (C.swarm) addSwarm(C.swarm);
+  for (const [f, to, t0, t1, c] of C.arcs) addArc(C.pins[f], C.pins[to], t0, t1, c === 'yel' ? YEL : RED);
+  const last = arcs[arcs.length - 1], m = C.mid;
+  // partner agencies: green pins + arcs that draw after the investigator approves
+  C.agencies.forEach((a, j) => {
+    const t0 = .5 + j * Math.min(.5, 2 / C.agencies.length), key = 'ag' + j;
+    C.info[key] = a.info;
+    addPin(key, { ...a, grn: true, t: [t0 + 1.6, t0 + 1.8, 99] }); if (a.nolabel) pins[key].el.style.display = 'none';
+    addArc(C.pins.end, a, t0, t0 + 1.6, GRN, true);
+  });
+  pins.mid = { el: addLabel(m.name + '<span class="sub">' + m.sub + '</span>', 'yel below', () => { show(m.src); hl(m.row); }), at: last.curve.getPoint(m.at || .55), t: m.t, dx: m.dx || 0, dy: m.dy || 0 };
+  $('kick').textContent = C.kick; $('ttl').textContent = C.title; $('sub').textContent = C.sub;
+  $('rows').innerHTML = C.rows.map(([k, v, sm, src], j) => `<div class="row" id="r${j}" data-at="${ROW_AT[j]}"><div class="k">${k}</div><div class="v">${v}${src ? `<span class="src" data-src="${src}">SRC ${src}</span>` : ''}<small>${sm}</small></div></div>`).join('')
+    + `<div class="row" data-at="15.4"><div class="k">${C.big.k}</div><div class="v"><span class="big" id="amt">$0</span></div></div>`;
+  $('mk').textContent = C.modal.k; $('mt').textContent = C.modal.t;
+  $('mf').innerHTML = C.modal.f.map(([k, v]) => `<div class="f"><div class="k">${k}</div><div>${v}</div></div>`).join('')
+    + `<div class="f"><div class="k">${u('sources')}</div><div><span class="src" data-src="1">SRC 1</span><span class="src" data-src="2">SRC 2</span><span class="src" data-src="3">SRC 3</span></div></div>`
+    + `<div class="f"><div class="k">${u('shareWith')}</div><div>${C.share}</div></div>`
+    + `<div class="f"><div class="k">${u('drafted')}</div><div>${u('draftedV')}</div></div>`;
+  document.querySelectorAll('.src').forEach(s => s.onclick = e => { e.stopPropagation(); $('modal').classList.remove('on'); show(+s.dataset.src); hl(+s.dataset.src); });
+  $('b1').textContent = C.action; $('b1').disabled = false;
+  [...$('cases').children].forEach((b, k) => b.classList.toggle('on', k === i));
+  approved = false; hT = 0; realShown = false; $('realBtn').textContent = u('src') + C.real.chip + ' ↗'; $('real').classList.remove('on'); userLon = 0; userLat = 0; zoom = 1; t = 0; $('modal').classList.remove('on');
+  buildGraph(); buildTimeline(); go(0);
+}
+
+// camera: eased moves between keyframes; bump lifts the view mid-move (to see arcs over the pole)
+function view(t) {
+  const K = C.cam; let j = 0; while (j < K.length - 2 && t > K[j + 1].t) j++;
+  const a = K[j], b = K[j + 1], k = inOut(seg(t, a.t, b.t)), s = Math.sin(Math.PI * k);
+  const raw = lerp(a.d, b.d, k) + (b.dbump || 0) * s;
+  // squeeze the authored distances so the whole globe stays in frame (radius ~330-390 px)
+  return { lon: lerp(a.lon, b.lon, k), lat: lerp(a.lat, b.lat, k) + (b.bump || 0) * s, dist: 6.0 + (raw - 4.5) * .4 };
+}
+
+// --- steps: each one plays the story forward to a stop ---
+let step = 0, t = 0, target = 0;
+let userLon = 0, userLat = 0, zoom = 1, approved = false, hT = 0;
+STOPS.forEach((_, i) => { const d = document.createElement('div'); d.className = 'dot'; d.onclick = () => go(i); $('dots').appendChild(d); });
+CASES.forEach((c, i) => { const b = document.createElement('button'); b.className = 'case'; b.onclick = () => loadCase(i); $('cases').appendChild(b); });
+// language switch keeps the place in the trace
+function applyUI() {
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i]').forEach(el => el.textContent = u(el.dataset.i));
+  document.querySelectorAll('#lang button').forEach(b => b.classList.toggle('on', b.dataset.l === LANG));
+  document.querySelectorAll('#cases .case').forEach((b, i) => b.textContent = localize(CASES[i].tab, TR[LANG] && TR[LANG][i] && TR[LANG][i].tab));
+}
+document.querySelectorAll('#lang button').forEach(b => b.onclick = () => {
+  if (b.dataset.l === LANG) return;
+  LANG = b.dataset.l; try { localStorage.setItem('trm-demo-lang', LANG); } catch (e) {}
+  applyUI(); if (!ready) return;
+  const keepT = t, wasPlaying = playing, wasApproved = approved;
+  loadCase(ci); scrubTo(keepT);
+  if (wasPlaying && keepT < END) { playing = true; target = END; $('play').textContent = '❚❚'; }
+  if (wasApproved) { approved = true; hT = 99; $('b1').disabled = true; $('b1').textContent = u('sharedB'); setCap(`<b>${u('realOut')}</b>${C.done.cap}`); }
+});
+applyUI();
+try { if (localStorage.getItem('trm-demo-view') === 'graph') setTimeout(() => setMode('graph')); } catch (e) {}
+setMode('globe');
+{ const b = document.createElement('button'); b.id = 'realBtn'; b.onclick = () => showReal(); $('cases').appendChild(b); }
+// captions cross-fade between steps; the latest one wins if steps change fast (scrubbing)
+let capHtml = '', capTimer = null;
+function setCap(html) {
+  if (html === capHtml) return; capHtml = html; $('cap').classList.add('swap');
+  if (!capTimer) capTimer = setTimeout(() => { $('cap').innerHTML = capHtml; $('cap').classList.remove('swap'); capTimer = null; }, 220);
+}
+function setStep(i) {
+  step = clamp(i, 0, STOPS.length - 1);
+  setCap(`<b>${C.steps[step][0]}</b>${C.steps[step][1]}`);
+  [...$('dots').children].forEach((d, k) => d.classList.toggle('on', k <= step));
+  $('back').disabled = step === 0; $('next').disabled = step === STOPS.length - 1;
+}
+function go(i) {
+  setStep(i); t = step ? STOPS[step - 1] : 0;
+  target = END; playing = true; $('play').textContent = '❚❚';
+  hideDetail();
+}
+
+// --- case timeline: story time t maps onto real case timestamps ---
+const END = STOPS[STOPS.length - 1];
+let playing = false;
+// markers sit evenly by event (not by story time) so close dates stay readable
+function knots() { const n = C.events.length; return [[0, 0], ...C.events.map((ev, i) => [ev.t, (i + 1) / n])]; }
+function xOf(t) { const K = knots(); for (let i = 1; i < K.length; i++) if (t <= K[i][0]) return lerp(K[i - 1][1], K[i][1], seg(t, K[i - 1][0], K[i][0])); return 1; }
+function tOf(x) { const K = knots(); for (let i = 1; i < K.length; i++) if (x <= K[i][1]) return lerp(K[i - 1][0], K[i][0], seg(x, K[i - 1][1], K[i][1])); return END; }
+function buildTimeline() {
+  $('marks').innerHTML = '';
+  C.events.forEach(ev => {
+    const m = document.createElement('div'); m.className = 'mk ' + (ev.yel ? 'yel' : 'red');
+    m.style.left = (xOf(ev.t) * 100) + '%'; m.title = ev.name;
+    m.innerHTML = `<span class="tip">${ev.tip}</span>`;
+    m.onpointerdown = e => { e.stopPropagation(); scrubTo(Math.min(END, ev.t + .7)); };
+    $('marks').appendChild(m); ev.el = m;
+  });
+}
+function drawTimeline() {
+  const k = xOf(t) * 100;
+  $('fill').style.width = k + '%'; $('head').style.left = k + '%';
+  let cur = null; for (const ev of C.events) { const hit = t >= ev.t; ev.el.classList.toggle('hit', hit); if (hit) cur = ev; }
+  $('clock').textContent = (cur || C.events[0]).when.toUpperCase();
+  if (approved && t >= END - .01) cur = { when: C.events[C.events.length - 1].when, name: C.done.line, shared: true };
+  $('evt').innerHTML = cur ? `<b>${u(cur.shared ? 'outcome' : cur.yel ? 'found' : 'event')}</b>${cur.name}` : `<b>${u('starting')}</b>${u('startingT')}`;
+}
+function stopPlay() { playing = false; target = t; $('play').textContent = '▶'; }
+function scrubTo(v) {
+  stopPlay(); t = target = clamp(v, 0, END);
+  let i = 0; while (i < STOPS.length - 1 && STOPS[i] <= t) i++; // same rule as playback: reaching a stop starts the next step
+  setStep(i); hideDetail();
+}
+let scrub = false;
+const trackT = e => { const r = $('track').getBoundingClientRect(); return tOf(clamp((e.clientX - r.left) / r.width)); };
+$('track').addEventListener('pointerdown', e => { scrub = true; $('track').setPointerCapture(e.pointerId); scrubTo(trackT(e)); });
+$('track').addEventListener('pointermove', e => { if (scrub) scrubTo(trackT(e)); });
+$('track').addEventListener('pointerup', () => { scrub = false; });
+$('play').onclick = () => {
+  if (playing) { stopPlay(); return; }
+  if (t >= END - .01) { t = 0; setStep(0); }
+  playing = true; target = END; $('play').textContent = '❚❚'; hideDetail();
+};
+$('next').onclick = () => go(step + 1);
+$('back').onclick = () => go(step - 1);
+$('reset').onclick = () => { userLon = 0; userLat = 0; zoom = 1; };
+addEventListener('keydown', e => { if (e.key === 'ArrowRight') go(step + 1); if (e.key === 'ArrowLeft') go(step - 1); if (e.key === 'Escape') { $('modal').classList.remove('on'); $('real').classList.remove('on'); hideDetail(); } });
+
+// --- drag to spin, wheel to zoom ---
+let drag = null;
+$('gl').addEventListener('pointerdown', e => { if (mode === 'graph') return; drag = { x: e.clientX, y: e.clientY }; $('gl').classList.add('drag'); $('gl').setPointerCapture(e.pointerId); $('hint').style.opacity = 0; });
+$('gl').addEventListener('pointermove', e => {
+  if (!drag) return;
+  userLon -= (e.clientX - drag.x) / scale * .18; userLat = clamp(userLat + (e.clientY - drag.y) / scale * .15, -60, 60);
+  drag = { x: e.clientX, y: e.clientY };
+});
+addEventListener('pointerup', () => { drag = null; $('gl').classList.remove('drag'); });
+$('gl').addEventListener('wheel', e => { e.preventDefault(); zoom = clamp(zoom * Math.exp(e.deltaY * .001), .75, 1.35); }, { passive: false });
+
+// --- evidence card, sources, row highlight ---
+function show(k) {
+  if (playing) stopPlay(); const [a, b, c] = C.info[k]; $('dk').textContent = a; $('dt').textContent = b; $('dd').innerHTML = c; $('detail').classList.add('on'); }
+// the real-world card: published facts only, kept apart from the made-up trace
+let realShown = false;
+function showReal() {
+  if (playing) stopPlay();
+  const r = C.real;
+  $('rk').textContent = u('realK') + r.src; $('rt').textContent = r.title; $('rw').textContent = r.who;
+  $('rs').innerHTML = r.stats.map(([v, k]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
+  $('rl').innerHTML = r.tl.map(([w, d]) => `<div><em>${w}</em>${d}</div>`).join('');
+  $('rht').textContent = r.helpT; $('rhl').innerHTML = r.help.map(h => `<div>${h}</div>`).join('');
+  $('rqt').textContent = '"' + r.quote + '"'; $('rlink').href = r.url;
+  $('real').classList.add('on');
+}
+$('rclose').onclick = () => $('real').classList.remove('on');
+$('real').onclick = e => { if (e.target === $('real')) $('real').classList.remove('on'); };
+function hideDetail() { $('detail').classList.remove('on'); document.querySelectorAll('.row.hl').forEach(r => r.classList.remove('hl')); }
+function hl(id) { document.querySelectorAll('.row.hl').forEach(r => r.classList.remove('hl')); if (id !== undefined && $('r' + id)) $('r' + id).classList.add('hl'); }
+$('dx').onclick = hideDetail;
+
+// --- freeze request flow ---
+const toast = (msg, ms) => { $('toast').textContent = msg; $('toast').classList.add('on'); setTimeout(() => $('toast').classList.remove('on'), ms); };
+$('b1').onclick = () => { if (step < 4) go(4); else scrubTo(END); $('modal').classList.add('on'); };
+$('cancel').onclick = () => $('modal').classList.remove('on');
+$('approve').onclick = () => {
+  approved = true; $('modal').classList.remove('on');
+  $('b1').disabled = true;
+  toast(C.done.toast, 3200);
+  $('b1').textContent = u('sharedB'); setCap(`<b>${u('realOut')}</b>${C.done.cap}`);
+};
+$('b2').onclick = () => toast(u('exportT'), 2000);
+
+const screen = new THREE.Vector3(), camDir = new THREE.Vector3();
+function render(clk) {
+  const T = t, v = view(t);
+  const shown = approved && t >= END - .01, hk = shown ? inOut(seg(hT, 0, 1.8)) : 0, hc = C.hcam;
+  v.lon = lerp(v.lon, hc.lon, hk); v.lat = lerp(v.lat, hc.lat, hk); v.dist = lerp(v.dist, 6.0 + (hc.d - 4.5) * .4, hk);
+  const lon = v.lon + userLon, lat = clamp(v.lat + userLat, -70, 70);
+  globe.rotation.y = -lon * D2R; tilt.rotation.x = lat * D2R;
+  cam.position.set(0, 0, v.dist * zoom); cam.lookAt(0, 0, 0); cam.setViewOffset(W, H, 280, -30, W, H);
+  cam.updateMatrixWorld(); scene.updateMatrixWorld(true);
+
+  ambient(clk, shown ? .45 : 1 - .3 * seg(t, 3, 4));
+  for (const a of arcs) {
+    const at = a.h ? (shown ? hT : -1) : t, k = inOut(seg(at, a.t0, a.t1)), n = Math.floor(k * a.N);
+    a.line.geometry.setDrawRange(0, n + 1);
+    a.tube.geometry.setDrawRange(0, Math.floor(a.idx * k / 6) * 6);
+    a.head.visible = k > 0 && k < 1; a.head.position.copy(a.curve.getPoint(k));
+    const fade = a.h ? 1 : 1 - .45 * seg(t, a.t1 + 1.5, a.t1 + 3);
+    a.line.material.opacity = fade; a.tube.material.opacity = .8 * fade;
+  }
+  camDir.copy(cam.position).normalize();
+  for (const key in pins) {
+    const p = pins[key], [ta, tl, tx] = p.t, t = p.h ? (shown ? hT : -1) : T;
+    const w = p.at.clone(); caseGroup.localToWorld(w);
+    const facing = w.clone().normalize().dot(camDir);
+    if (p.grp) {
+      p.grp.scale.setScalar(Math.max(.001, outBack(seg(t, ta, ta + .5))));
+      const ph = (clk % 1.6) / 1.6;
+      p.ring.material.opacity = .9 * (1 - ph); p.ring.scale.setScalar(1 + ph * 1.4);
+      p.ring2.material.opacity = p.end && !approved ? .9 * (Math.sin(clk * 4) * .5 + .5) * seg(t, 13.6, 14) : 0;
+    }
+    screen.copy(w).project(cam);
+    const x = (screen.x * .5 + .5) * W, y = (-screen.y * .5 + .5) * H;
+    // victim labels clear once the panel takes over; the Victims row keeps their details
+    const out = p.role === 'victim' ? (1 - seg(t, tx, tx + .35)) : 1;
+    // after the handoff only the exchange and the agencies keep labels
+    const clear = shown && !p.h && !p.end ? 1 - seg(hT, .3, .9) : 1;
+    const vis = seg(t, tl, tl + .35) * out * clear * clamp((facing - .15) * 5);
+    p.el.style.opacity = vis; p.el.style.pointerEvents = vis > .3 ? 'auto' : 'none';
+    p.el.style.left = (x + p.dx) + 'px'; p.el.style.top = (p.dy + (p.el.classList.contains('below') ? y : y - 22)) + 'px';
+  }
+
+  $('panel').style.opacity = seg(t, 8.9, 9.4);
+  $('panel').style.pointerEvents = t > 9 ? 'auto' : 'none';
+  $('panel').style.transform = `translateX(${(1 - out3(seg(t, 8.9, 9.6))) * 40}px)`;
+  document.querySelectorAll('[data-at]').forEach(el => { const a = +el.dataset.at, k = out3(seg(t, a, a + .45)); el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 12}px)`; el.style.pointerEvents = k > .5 ? 'auto' : 'none'; });
+  const amt = C.big.v * out3(seg(t, 15.4, 16.6));
+  const [num, unit] = amt >= 1e9 ? [(amt / 1e9).toFixed(1), LANG === 'fr' ? ' Md' : 'B'] : amt >= 1e6 ? [(amt / 1e6).toFixed(1), LANG === 'fr' ? ' M' : 'M'] : [String(Math.round(amt / 1e3)), LANG === 'fr' ? ' k' : 'K'];
+  $('amt').textContent = C.big.n ? Math.round(amt) : (C.big.approx ? '~' : '') + (LANG === 'fr' ? num.replace('.', ',') + unit + '$' : '$' + num + unit);
+  const st = $('status');
+  if (approved) { st.textContent = u('shared'); st.style.color = 'var(--ok-ink)'; }
+  else if (step === 4) { st.textContent = u('awaiting'); st.style.color = 'var(--accent)'; }
+  else { st.textContent = u('tracing'); st.style.color = 'var(--red)'; }
+
+  $('readout').textContent = `LAT ${lat.toFixed(2)}°  LON ${(((lon + 540) % 360) - 180).toFixed(2)}°  ·  ${u('chains')} ${C.chains}`;
+  drawGraph(shown);
+  drawSwarm();
+  drawTimeline();
+  renderer.render(scene, cam);
+}
+
+let last = performance.now();
+(function loop(now) {
+  const dt = Math.min(.05, ((now || last) - last) / 1000); last = now || last;
+  if (ready) {
+    if (t < target) t = Math.min(target, t + dt * 1.15);
+    if (approved) hT += dt;
+    if (playing) { while (step < STOPS.length - 1 && t >= STOPS[step]) setStep(step + 1); if (t >= END) { playing = false; $('play').textContent = '▶'; } }
+    if (!drag) userLon += dt * .6; // slow idle drift
+    render(now / 1000 || 0);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
