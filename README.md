@@ -27,7 +27,7 @@ Open `index.html` in a browser. It needs no server and no build step.
 
 ## Deploy
 
-The Vercel project `trm-globe-demo` deploys this repo. Push to `main` to update the live site.
+The site runs on the Vercel project `trm-globe-demo`. It is a static site with no build step. To deploy, run `vercel deploy --prod` from the repo root.
 
 The site is unlisted. A `noindex` meta tag and an `X-Robots-Tag` header in `vercel.json` keep it out of search results.
 
